@@ -1,0 +1,5 @@
+*.sw?
+Release
+Debug
+Build
+*~

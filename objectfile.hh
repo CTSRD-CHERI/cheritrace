@@ -38,28 +38,80 @@ namespace cheri {
 namespace objectfile {
 
 
+/**
+ * A function within an object file.
+ */
 struct function
 {
+	/**
+	 * The name of the function, as it appears in the object file.
+	 */
 	virtual const std::string mangled_name() const = 0;
+	/**
+	 * The name demangled, assuming that it is a C++ function.  This will be
+	 * the same as the `mangled_name()` if the symbol is not a C++ name.
+	 */
 	virtual const std::string demangled_name() const = 0;
+	/**
+	 * The name of the section that this function appears in.
+	 */
 	virtual const std::string section_name() const = 0;
+	/**
+	 * The size of the function, in bytes.
+	 */
 	virtual uint64_t size() const = 0;
+	/**
+	 * The address of the start of the function.
+	 */
 	virtual uint64_t base_address() const = 0;
+	/**
+	 * Read one instruction (32 bits) of data from the function.
+	 */
 	virtual uint32_t operator[](uint64_t idx) const = 0;
 };
 
+/**
+ * Line info from the debug metadata.
+ */
 struct line_info
 {
+	/**
+	 * The name of the source file containing the address.
+	 */
 	std::string file;
+	/**
+	 * The name of the function at this address.
+	 *
+	 * Note: An LLVM bug is currently preventing this from working.
+	 */
 	std::string function;
+	/**
+	 * The line number within the source file.
+	 */
 	uint32_t line;
+	/**
+	 * The column  number within the source line.
+	 */
 	uint32_t column;
 };
 
+/**
+ * An object file.
+ */
 struct file
 {
+	/**
+	 * Return a function object for the function that exists at this address
+	 * within the object file.
+	 */
 	virtual std::shared_ptr<function> function_at_address(uint64_t address) = 0;
+	/**
+	 * Find the debug info for an address within the object file.
+	 */
 	virtual line_info debug_info_for_address(uint64_t address) = 0;
+	/**
+	 * Open an object file and return an object representing it.
+	 */
 	static std::shared_ptr<file> open(const std::string &);
 };
 

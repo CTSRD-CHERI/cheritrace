@@ -66,15 +66,41 @@ namespace {
 
 class concrete_file;
 
+/**
+ * Concrete subclass of `function` that implements the real behaviour.
+ */
 class concrete_function : public function
 {
+	/**
+	 * The file that contains this function.  The `buffer` is owned by the
+	 * file, so the file must persist for at least as long as each function.
+	 */
 	std::shared_ptr<concrete_file> file;
+	/**
+	 * The base address of the function.
+	 */
 	uint64_t base;
+	/**
+	 * The demangled version of the function name.
+	 */
 	std::string name;
+	/**
+	 * The mangled version of the function name.
+	 */
 	std::string mangled;
+	/**
+	 * The name of the section that contains this function (normally .text).
+	 */
 	std::string sectionName;
+	/**
+	 * The buffer.  This is a reference into data owned by the file.
+	 */
 	llvm::StringRef buffer;
 	public:
+	/**
+	 * Constructor.  Creates a new function object referring to the specified
+	 * file.
+	 */
 	concrete_function(std::shared_ptr<concrete_file> &&f,
 	                  uint64_t start,
 	                  llvm::StringRef contents, 
@@ -130,13 +156,32 @@ class concrete_function : public function
 	}
 };
 
+/**
+ * Concrete subclass of `file`.  Subclasses `std::enable_shared_from_this` to
+ * allow the `function_at_address` to pass a `std::shared_ptr` to the
+ * `concrete_function` constructor.
+ */
 class concrete_file : public file, public std::enable_shared_from_this<concrete_file>
 {
+	/**
+	 * The LLVM object representing the file.
+	 */
 	llvm::object::OwningBinary<llvm::object::ObjectFile> objectFileHolder;
+	/**
+	 * LLVM object file object.  Owned by `objectFileHolder`.
+	 */
 	llvm::object::ObjectFile *objectFile;
+	/**
+	 * Debug info context associated with the file.  Used to implement the
+	 * `debug_info_for_address()` method.
+	 */
 	llvm::DIContext *debugInfo;
 	public:
 	std::shared_ptr<function> function_at_address(uint64_t address) override;
+	/**
+	 * Initialise the object.  This is not in the constructor, to allow better
+	 * handling in case of failure.
+	 */
 	bool init(const std::string file)
 	{
 		assert(!objectFile);

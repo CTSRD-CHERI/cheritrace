@@ -84,6 +84,10 @@ struct debug_trace_entry_disk {
 	uint8_t     asid;
 } __attribute__((packed));
 
+/**
+ * Format for on-disk trace entries from older versions of berictl.  These are
+ * all stored in CHERI native endian (big endian).
+ */
 struct debug_trace_entry_disk_v1 {
 	/**
 	 * The version of the trace entry.  This is more accurately a type.

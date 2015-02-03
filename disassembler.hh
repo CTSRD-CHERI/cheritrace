@@ -42,19 +42,48 @@
 namespace cheri {
 namespace disassembler  {
 
+/**
+ * Information about an instruction.
+ */
 struct instruction_info {
+	/**
+	 * Enumeration used to classify instructions.
+	 */
 	enum instruction_type {
 		unknown = 0,
 		flow_control,
 		memory_access
-	} type = unknown;
+	};
+	/**
+	 * The type of the instruction.
+	 */
+	instruction_type type = unknown;
+	/**
+	 * The disassembled instruction.
+	 */
 	std::string name;
+	/**
+	 * Is this a call instruction?
+	 */
 	bool is_call = false;
+	/**
+	 * Is this a return instruction?
+	 */
 	bool is_return = false;
+	/**
+	 * Is this an instruction that has a delay slot?
+	 */
 	bool has_delay_slot = false;
+	/**
+	 * Which register is the destination for this instruction?
+	 */
 	int destination_register = -1;
 };
 
+/**
+ * The names of instructions, indexed by the values stored in
+ * `destination_register` in the `instruction_info` field.
+ */
 static const char* const MipsRegisterNames[] = {
 	"zero", "at", "v0", "v1",
 	"a0", "a1", "a2", "a3",
@@ -66,14 +95,35 @@ static const char* const MipsRegisterNames[] = {
 	"gp", "sp", "fp", "ra"
 };
 
-
+/**
+ * Public interface to the disassembler.  Note that this is not safe to use
+ * across threads.
+ */
 class disassembler {
+	/**
+	 * LLVM machine code context.
+	 */
 	std::unique_ptr<llvm::MCContext> mccontext;
+	/**
+	 * LLVM disassembler.
+	 */
 	std::unique_ptr<llvm::MCDisassembler> disAsm;
+	/**
+	 * LLVM instruction printer.
+	 */
 	std::unique_ptr<llvm::MCInstPrinter> instrPrinter;
+	/**
+	 * Map from LLVM's notion of registers to something stable.
+	 */
 	int registerIndexForLLVMRegNo(unsigned regNo);
 public:
+	/**
+	 * Construct a new disassembler.
+	 */
 	disassembler();
+	/**
+	 * Disassemble an instruction and return information about it.
+	 */
 	instruction_info &&disassemble(uint32_t);
 };
 

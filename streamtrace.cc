@@ -78,12 +78,25 @@ struct keyframe
  * segments.
  */
 class trace_segment {
+	/**
+	 * Adds a new entry to the end of this trace segment.  This exists so that
+	 * the code doesn't need duplicating between template variants.
+	 */
 	void add_entry(disassembler::disassembler &d,
 	               keyframe &,
 	               const debug_trace_entry &);
 	public:
+	/**
+	 * The register sets within this segment, one per step in the trace.
+	 */
 	std::vector<register_set>      regs;
+	/**
+	 * The trace entries for this segment.
+	 */
 	std::vector<debug_trace_entry> entries;
+	/**
+	 * Construct a trace segment from a sequence of trace entries.
+	 */
 	template<class T>
 	trace_segment(disassembler::disassembler &d, keyframe rs, T &&begin, T &&end)
 	{
@@ -97,6 +110,9 @@ class trace_segment {
 	}
 };
 
+/**
+ * Concrete subclass of the streamtrace.  Manages trace segments.
+ */
 template<class T>
 class concrete_streamtrace : public trace
 {
@@ -226,6 +242,9 @@ class concrete_streamtrace : public trace
 		return true;
 	}
 	public:
+	/**
+	 * Construct a streamtrace from two iterators.  
+	 */
 	concrete_streamtrace(T &&b, T &&e) : begin(b), end(e)
 	{
 		preload_thread = std::thread([&] { preload(); });
@@ -263,63 +282,132 @@ class concrete_streamtrace : public trace
 	}
 };
 
+/**
+ * Metadata describing v1 trace files.
+ */
 struct trace_v1_traits {
+	/**
+	 * v1 traces have no header
+	 */
 	__attribute__((unused)) // This is used, but only via template instantiation.
 	static const int offset = 0;
+	/**
+	 * Format of the trace entries.
+	 */
 	typedef debug_trace_entry_disk_v1 format;
 };
+/**
+ * Metadata describing v2 trace files.
+ */
 struct trace_v2_traits {
+	/**
+	 * v2 traces have one byte of version number then CheriStreamTrace as a
+	 * string.
+	 */
 	static const int offset = 17; // length of %cCheriStreamTrace;
+	/**
+	 * Format of the trace entries.
+	 */
 	typedef debug_trace_entry_disk_v1 format;
 };
 
+/**
+ * File stream.  Within iterators, we use a shared pointer to an input file
+ * stream for reading.
+ */
 typedef std::shared_ptr<std::ifstream> filestream;
+/**
+ * Iterator for accessing elements in a streamtrace.  This is a template to
+ * allow it to be used for both v1 and v2 streamtraces.  The differences
+ * between the two formats are provided by the `trace_v?_traits` classes.
+ */
 template<class Traits>
 class streamtrace_iterator : public std::iterator<std::random_access_iterator_tag, typename Traits::format, uint64_t> {
+	/**
+	 * The type of this iterator.
+	 */
 	typedef streamtrace_iterator<Traits> iter;
+	/**
+	 * Offset within the file of this of this iterator.
+	 */
 	uint64_t offset = 0;
+	/**
+	 * The file that this iterator refers to.
+	 */
 	filestream file;
 	public:
+	/**
+	 * Constructs an iterator from a file at a specific offset.
+	 */
 	streamtrace_iterator(filestream f, int o) : offset(o), file(f) {}
+	/**
+	 * Copy constructor.
+	 */
 	streamtrace_iterator(streamtrace_iterator &other) :
 		streamtrace_iterator(other.file, other.offset) {}
+	/**
+	 * Move constructor.
+	 */
 	streamtrace_iterator(streamtrace_iterator &&other) :
 		streamtrace_iterator(std::move(other.file), other.offset) {}
+	/**
+	 * Construct a new iterator referring to the same file with a new offset.
+	 */
 	iter operator+(int x) {
 		iter copy(file, offset + sizeof(typename Traits::format) * x);
 		return copy;
 	}
+	/**
+	 * Construct a new iterator referring to the same file with a new offset.
+	 */
 	iter operator++(int x) {
 		iter copy(file, offset + sizeof(typename Traits::format) * x);
 		return copy;
 	}
+	/**
+	 * Move the offset within the file forwards.
+	 */
 	iter &operator++() {
 		offset += sizeof(typename Traits::format) * 1;
 		return *this;
 	}
+	/**
+	 * Move the offset within the file forwards.
+	 */
 	iter &operator+=(int x) {
 		offset += x * sizeof(typename Traits::format);
 		return *this;
 	}
-	iter &operator-=(int x) {
-		offset -= x * sizeof(typename Traits::format);
-		return *this;
-	}
+	/**
+	 * Returns the difference between two iterators to the same file.
+	 * Undefined behaviour if called with iterators to different files.
+	 */
 	uint64_t operator-(const streamtrace_iterator<Traits>& other) {
+		assert(file == other.file);
 		return (offset - other.offset) / sizeof(typename Traits::format);
 	}
+	/**
+	 * Return a copy of the trace entry at the current file offset.
+	 */
 	typename Traits::format operator*() {
 		file->seekg(offset);
 		typename Traits::format buffer;
 		file->read((char*)&buffer, sizeof(buffer));
 		return buffer;
 	}
+	/**
+	 * Compares two iterators.  Undefined if they point to different files.
+	 */
 	bool operator!=(streamtrace_iterator<Traits> &o)
 	{
+		assert(file == o.file);
 		return offset != o.offset;
 	}
 };
 
+/**
+ * Helper template for constructing the streamtrace.  
+ */
 template<class T> inline
 std::shared_ptr<concrete_streamtrace<streamtrace_iterator<T>>>
 make_trace(filestream &file, off_t size)

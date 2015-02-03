@@ -5,12 +5,19 @@ project(cheritrace)
 set(cheritrace_VERSION 0.1)
 
 file(GLOB cheritrace_CXX_SRCS "*.cc")
+file(GLOB cheritrace_HDRS "*.hh")
 set(LLVM_LIBS
 	Mips DebugInfo mc mcparser mcdisassembler object
 )
 
 # Define the cheritrace program that we will build
 add_library(cheritrace SHARED ${cheritrace_CXX_SRCS})
+add_library(cheritrace-static STATIC ${cheritrace_CXX_SRCS})
+
+set_target_properties(cheritrace-static PROPERTIES
+	POSITION_INDEPENDENT_CODE true
+	OUTPUT_NAME cheritrace)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-zero-length-array")
 
 find_program(LLVM_CONFIG NAMES llvm-config DOC "Path to llvm-config utility")
@@ -65,4 +72,16 @@ if (TESTS)
 	enable_testing()
 	add_subdirectory(Tests)
 endif ()
+
+if (NOT CMAKE_INSTALL_LIBDIR)
+	set(CMAKE_INSTALL_LIBDIR lib)
+endif ()
+
+set(INSTALL_TARGETS cheritrace)
+list(APPEND INSTALL_TARGETS cheritrace-static)
+install(TARGETS ${INSTALL_TARGETS}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES ${cheritrace_HDRS}
+	DESTINATION "include/cheritrace")
 

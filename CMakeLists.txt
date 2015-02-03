@@ -4,11 +4,7 @@ project(cheritrace)
 
 set(cheritrace_VERSION 0.1)
 
-set(cheritrace_CXX_SRCS
-	disassembler.cc
-	objectfile.cc
-	streamtrace.cc
-)
+file(GLOB cheritrace_CXX_SRCS "*.cc")
 set(LLVM_LIBS
 	Mips DebugInfo mc mcparser mcdisassembler object
 )

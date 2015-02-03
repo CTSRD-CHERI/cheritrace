@@ -2,6 +2,7 @@
 set(TESTS
 	debug.cc
 	disassemble.cc
+	disassemble_object.cc
 	object.cc
 	regvalues.cc
 	shared_debug.cc

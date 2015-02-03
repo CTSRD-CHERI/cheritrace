@@ -65,7 +65,8 @@ struct function
 	 */
 	virtual uint64_t base_address() const = 0;
 	/**
-	 * Read one instruction (32 bits) of data from the function.
+	 * Read one instruction (32 bits) of data from the function.  The result is
+	 * in the host byte order.
 	 */
 	virtual uint32_t operator[](uint64_t idx) const = 0;
 };

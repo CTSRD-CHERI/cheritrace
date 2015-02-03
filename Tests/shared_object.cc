@@ -13,5 +13,5 @@ int main()
 	assert(func->mangled_name() == "hi");
 	assert(func->demangled_name() == "hi");
 	assert(func->section_name() == ".text");
-	assert((*func)[0] == 0x67bdffe0);
+	assert((*func)[0] == 0xe0ffbd67);
 }

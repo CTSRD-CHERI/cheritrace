@@ -30,6 +30,7 @@
  * @BERI_LICENSE_HEADER_END@
  */
 
+#include "cheri.hh"
 #include "objectfile.hh"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -152,7 +153,7 @@ class concrete_function : public function
 		val |= (unsigned char)buffer[idx++];
 		val <<=8;
 		val |= (unsigned char)buffer[idx];
-		return val;
+		return cheri_byte_order_to_host(val);
 	}
 };
 

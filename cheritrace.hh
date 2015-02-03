@@ -32,4 +32,5 @@
 
 #include "cheri.hh"
 #include "disassembler.hh"
+#include "objectfile.hh"
 #include "streamtrace.hh"

@@ -444,7 +444,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 	}
 }
 
-std::shared_ptr<trace> trace::open(const char *file_name)
+std::shared_ptr<trace> trace::open(const std::string &file_name)
 {
 	std::shared_ptr<trace> ret;
 	auto file = std::make_shared<std::ifstream>(file_name, std::ios::in |

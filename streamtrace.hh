@@ -264,7 +264,7 @@ struct trace {
 	/**
 	 * Constructs a new streamtrace from the specified file.
 	 */
-	static std::shared_ptr<trace> open(const char *file);
+	static std::shared_ptr<trace> open(const std::string &file);
 };
 }
 } // namespace cheri

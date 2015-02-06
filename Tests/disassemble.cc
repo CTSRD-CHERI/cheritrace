@@ -17,7 +17,7 @@ int main()
 			auto entry = trace->get_entry();
 			auto info = dis.disassemble(entry.inst);
 			std::cout << info.name << '\n';
-			//assert(info.name == str);
+			assert(info.name == str);
 		};
 	expect_asm(0, "	ld	$19, 24($sp)");
 	expect_asm(1, "	ld	$18, 16($sp)");

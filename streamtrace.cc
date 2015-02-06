@@ -34,6 +34,9 @@
 #include "disassembler.hh"
 #include <fstream>
 #include <thread>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
 
 using namespace cheri;
 using namespace streamtrace;

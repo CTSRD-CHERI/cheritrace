@@ -469,7 +469,7 @@ std::shared_ptr<trace> trace::open(const std::string &file_name)
 	}
 	else
 	{
-		if (buffer[0] - 0x80 != 2)
+		if (buffer[0] - (char) 0x80 != (char) 2)
 		{
 			throw std::invalid_argument("Unrecognised trace file version");
 		}

@@ -124,7 +124,7 @@ public:
 	/**
 	 * Disassemble an instruction and return information about it.
 	 */
-	instruction_info &&disassemble(uint32_t);
+	instruction_info disassemble(uint32_t);
 };
 
 

@@ -149,7 +149,7 @@ disassembler::disassembler()
 }
 
 
-instruction_info &&disassembler::disassemble(uint32_t anInstruction)
+instruction_info disassembler::disassemble(uint32_t anInstruction)
 {
 	assert(mccontext->getAsmInfo());
 	instruction_info info;

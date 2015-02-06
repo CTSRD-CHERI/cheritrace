@@ -307,11 +307,11 @@ struct trace_v2_traits {
 	 * v2 traces have one byte of version number then CheriStreamTrace as a
 	 * string.
 	 */
-	static const int offset = 17; // length of %cCheriStreamTrace;
+	static const int offset = sizeof(debug_trace_entry_disk);
 	/**
 	 * Format of the trace entries.
 	 */
-	typedef debug_trace_entry_disk_v1 format;
+	typedef debug_trace_entry_disk format;
 };
 
 /**
@@ -462,8 +462,8 @@ std::shared_ptr<trace> trace::open(const std::string &file_name)
 	file->seekg(0);
 	file->read((char*)&buffer, trace_v2_traits::offset);
 	file->seekg(0);
-	std::string header(buffer+1, trace_v2_traits::offset-1);
-	if (header != "CheriStreamTrace")
+	std::string header(buffer+1, sizeof("CheriStreamTrace"));
+	if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{
 		ret = make_trace<trace_v1_traits>(file, size);
 	}

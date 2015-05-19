@@ -173,6 +173,10 @@ class concrete_streamtrace : public trace
 	 */
 	disassembler::disassembler disass;
 	/**
+	 * The callback that will be invoked when preloading.
+	 */
+	notifier callback;
+	/**
 	 * Scans the entire streamtrace and records keyframes for faster seeking.
 	 *
 	 * This method is expected to be invoked precisely once, from another
@@ -185,8 +189,10 @@ class concrete_streamtrace : public trace
 		keyframes.push_back(kf);
 		disassembler::disassembler d;
 		int frame = keyframe_interval;
+		uint64_t frames_loaded = 0;
 		for (T i=begin ; i!=end ; ++i)
 		{
+			frames_loaded++;
 			if (cancel)
 			{
 				return;
@@ -198,7 +204,15 @@ class concrete_streamtrace : public trace
 				std::lock_guard<std::mutex> lock(keyframe_lock);
 				keyframes.push_back(kf);
 				notify.notify_all();
+				if (callback && callback(this,  frames_loaded, false))
+				{
+					break;
+				}
 			}
+		}
+		if (callback)
+		{
+			callback(this,  frames_loaded, true);
 		}
 		finished_loading = true;
 		notify.notify_all();
@@ -248,7 +262,7 @@ class concrete_streamtrace : public trace
 	/**
 	 * Construct a streamtrace from two iterators.  
 	 */
-	concrete_streamtrace(T &&b, T &&e) : begin(b), end(e)
+	concrete_streamtrace(T &&b, T &&e, notifier fn) : begin(b), end(e), callback(fn)
 	{
 		preload_thread = std::thread([&] { preload(); });
 	}
@@ -413,12 +427,12 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
  */
 template<class T> inline
 std::shared_ptr<concrete_streamtrace<streamtrace_iterator<T>>>
-make_trace(filestream &file, off_t size)
+make_trace(filestream &file, off_t size, trace::notifier fn)
 {
 	typedef streamtrace_iterator<T> iter;
 	iter begin(file, T::offset);
 	iter end(file, size);
-	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end));
+	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end), fn);
 }
 
 } // Anonymous namespace
@@ -447,7 +461,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 	}
 }
 
-std::shared_ptr<trace> trace::open(const std::string &file_name)
+std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 {
 	std::shared_ptr<trace> ret;
 	auto file = std::make_shared<std::ifstream>(file_name, std::ios::in |
@@ -465,7 +479,7 @@ std::shared_ptr<trace> trace::open(const std::string &file_name)
 	std::string header(buffer+1, sizeof("CheriStreamTrace"));
 	if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{
-		ret = make_trace<trace_v1_traits>(file, size);
+		ret = make_trace<trace_v1_traits>(file, size, fn);
 	}
 	else
 	{
@@ -473,9 +487,14 @@ std::shared_ptr<trace> trace::open(const std::string &file_name)
 		{
 			throw std::invalid_argument("Unrecognised trace file version");
 		}
-		ret = make_trace<trace_v2_traits>(file, size);
+		ret = make_trace<trace_v2_traits>(file, size, fn);
 	}
 	return ret;
+}
+std::shared_ptr<trace> trace::open(const std::string &file_name)
+{
+	notifier fn = nullptr;
+	return trace::open(file_name, fn);
 }
 void trace_segment::add_entry(disassembler::disassembler &d,
                               keyframe &kf,

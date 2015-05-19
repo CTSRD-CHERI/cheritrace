@@ -35,6 +35,7 @@
 #include <memory>
 #include <array>
 #include <bitset>
+#include <functional>
 
 namespace cheri {
 namespace streamtrace {
@@ -243,6 +244,14 @@ struct register_set {
  */
 struct trace {
 	/**
+	 * Callback that is invoked while the streamtrace is being loaded.  The
+	 * parameters are a pointer to the trace that is being loaded, the number
+	 * of trace entries loaded so far, and whether the stream has finished
+	 * loading.  The return value should be true if the traces should continue
+	 * loading, false otherwise.
+	 */
+	typedef std::function<bool(trace*, uint64_t, bool)> notifier;
+	/**
 	 * Returns the number of entries in the trace.
 	 */
 	virtual uint64_t size() = 0;
@@ -265,6 +274,13 @@ struct trace {
 	 * Constructs a new streamtrace from the specified file.
 	 */
 	static std::shared_ptr<trace> open(const std::string &file);
+	/**
+	 * Constructs a new streamtrace from the specified file and call the
+	 * specified notifier as it loads.  Note that the notifier will be called
+	 * from a separate thread - the user is responsible for ensuring that any
+	 * required synchronisation is performed.
+	 */
+	static std::shared_ptr<trace> open(const std::string &file, notifier);
 };
 }
 } // namespace cheri

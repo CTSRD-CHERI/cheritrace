@@ -34,10 +34,10 @@
 #include "objectfile.hh"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/StringRefMemoryObject.h"
+#include "llvm/Object/ObjectFile.h"
+#include "llvm/DebugInfo/DWARF/DIContext.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler.h"
@@ -49,7 +49,6 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCRelocationInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/DebugInfo/DIContext.h"
 
 
 #include <cxxabi.h>

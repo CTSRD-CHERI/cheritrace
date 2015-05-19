@@ -7,7 +7,7 @@ set(cheritrace_VERSION 0.1)
 file(GLOB cheritrace_CXX_SRCS "*.cc")
 file(GLOB cheritrace_HDRS "*.hh")
 set(LLVM_LIBS
-	Mips DebugInfo mc mcparser mcdisassembler object
+	Mips debuginfodwarf mc mcparser mcdisassembler object
 )
 
 # Define the cheritrace program that we will build

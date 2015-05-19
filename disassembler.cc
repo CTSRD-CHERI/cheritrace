@@ -36,7 +36,6 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/StringRefMemoryObject.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -153,11 +152,13 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 {
 	assert(mccontext->getAsmInfo());
 	instruction_info info;
-	llvm::StringRef instMemory((const char*)&anInstruction, sizeof(anInstruction));
-	llvm::StringRefMemoryObject memoryObject(instMemory, 0);
+	uint8_t instbytes[4];
+	std::memcpy(instbytes, &anInstruction, sizeof(anInstruction));
+	static_assert(sizeof(anInstruction) == sizeof(instbytes),
+			"Instruction size is wrong!");
 	llvm::MCInst inst;
 	uint64_t size;
-	auto status = disAsm->getInstruction(inst, size, memoryObject, 0,
+	auto status = disAsm->getInstruction(inst, size, instbytes, 0,
 			llvm::errs(), llvm::errs());
 	if (status != llvm::MCDisassembler::Success)
 	{

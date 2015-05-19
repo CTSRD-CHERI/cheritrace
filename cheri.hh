@@ -30,6 +30,7 @@
  * @BERI_LICENSE_HEADER_END@
  */
 
+#pragma once
 #include <cstdint>
 
 namespace cheri {

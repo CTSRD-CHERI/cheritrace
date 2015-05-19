@@ -1,5 +1,6 @@
 # List of single-file tests.
 set(TESTS
+	address_map.cc
 	debug.cc
 	disassemble.cc
 	disassemble_object.cc

@@ -16,7 +16,7 @@ int main()
 			assert(success);
 			auto entry = trace->get_entry();
 			auto info = dis.disassemble(entry.inst);
-			//std::cout << "'" << info.name << "'vs'" << str << "'" << std::endl;
+			//std::cout << "'" << info.name << "' vs '" << str << "'" << std::endl;
 			assert(info.name == str);
 		};
 	expect_asm(0, "	rdhwr	$16, $hwr_cc");

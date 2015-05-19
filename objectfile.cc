@@ -170,12 +170,12 @@ class concrete_file : public file, public std::enable_shared_from_this<concrete_
 	/**
 	 * LLVM object file object.  Owned by `objectFileHolder`.
 	 */
-	llvm::object::ObjectFile *objectFile;
+	llvm::object::ObjectFile *objectFile = nullptr;
 	/**
 	 * Debug info context associated with the file.  Used to implement the
 	 * `debug_info_for_address()` method.
 	 */
-	llvm::DIContext *debugInfo;
+	llvm::DIContext *debugInfo = nullptr;
 	public:
 	std::shared_ptr<function> function_at_address(uint64_t address) override;
 	/**

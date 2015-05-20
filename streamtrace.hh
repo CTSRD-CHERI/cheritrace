@@ -247,8 +247,8 @@ struct trace {
 	 * Callback that is invoked while the streamtrace is being loaded.  The
 	 * parameters are a pointer to the trace that is being loaded, the number
 	 * of trace entries loaded so far, and whether the stream has finished
-	 * loading.  The return value should be true if the traces should continue
-	 * loading, false otherwise.
+	 * loading.  The return value should be false if the traces should continue
+	 * loading, true otherwise.
 	 */
 	typedef std::function<bool(trace*, uint64_t, bool)> notifier;
 	/**

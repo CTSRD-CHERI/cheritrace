@@ -32,11 +32,15 @@
 
 #include "streamtrace.hh"
 #include "disassembler.hh"
-#include <fstream>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <fcntl.h>
+
 
 using namespace cheri;
 using namespace streamtrace;
@@ -329,10 +333,33 @@ struct trace_v2_traits {
 };
 
 /**
+ * Simple wrapper around a file descriptor.  Exists so that it can be reference
+ * counted by shared_ptr and close the file once it is no longer needed.  This
+ * exists because iterators want to have a stateless reference to a file.
+ */
+struct fd
+{
+	/**
+	 * UNIX file descriptor.  Defaults to invalid value.
+	 */
+	int fileno = -1;
+	/**
+	 * Construct the `fd` from a file descriptor.
+	 */
+	fd(int f) : fileno(f) {}
+	/**
+	 * Close the file descriptor when this is destroyed.
+	 */
+	~fd() { close(fileno); }
+};
+
+/**
  * File stream.  Within iterators, we use a shared pointer to an input file
  * stream for reading.
  */
-typedef std::shared_ptr<std::ifstream> filestream;
+typedef std::shared_ptr<fd> filestream;
+
+
 /**
  * Iterator for accessing elements in a streamtrace.  This is a template to
  * allow it to be used for both v1 and v2 streamtraces.  The differences
@@ -407,9 +434,8 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 * Return a copy of the trace entry at the current file offset.
 	 */
 	typename Traits::format operator*() {
-		file->seekg(offset);
 		typename Traits::format buffer;
-		file->read((char*)&buffer, sizeof(buffer));
+		pread(file->fileno, (void*)&buffer, sizeof(buffer), offset);
 		return buffer;
 	}
 	/**
@@ -464,18 +490,17 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 {
 	std::shared_ptr<trace> ret;
-	auto file = std::make_shared<std::ifstream>(file_name, std::ios::in |
-			std::ios::binary | std::ios::ate);
-	if (!file->is_open())
+	int fileno = ::open(file_name.c_str(), O_RDONLY);
+	if (fileno < 0)
 	{
 		return std::shared_ptr<trace>(nullptr);
 	}
-	auto size = file->tellg();
+	auto file = std::make_shared<fd>(fileno);
+	auto size = lseek(fileno, 0, SEEK_END);
 	char buffer[trace_v2_traits::offset + 1];
 	buffer[trace_v2_traits::offset] = 0;
-	file->seekg(0);
-	file->read((char*)&buffer, trace_v2_traits::offset);
-	file->seekg(0);
+	lseek(fileno, 0, SEEK_SET);
+	pread(fileno, (void*)&buffer, trace_v2_traits::offset, 0);
 	std::string header(buffer+1, sizeof("CheriStreamTrace"));
 	if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{

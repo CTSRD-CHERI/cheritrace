@@ -6,6 +6,7 @@ set(TESTS
 	disassemble_object.cc
 	object.cc
 	regvalues.cc
+	scan.cc
 	shared_debug.cc
 	shared_object.cc
 	simple.cc

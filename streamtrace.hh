@@ -252,6 +252,12 @@ struct trace {
 	 */
 	typedef std::function<bool(trace*, uint64_t, bool)> notifier;
 	/**
+	 * Callback for scanning the streamtrace.  The first argument is the trace
+	 * entry, the second the index in the trace.  The function should return
+	 * true to abort scanning, false otherwise.
+	 */
+	typedef std::function<bool(debug_trace_entry, uint64_t)> scanner;
+	/**
 	 * Returns the number of entries in the trace.
 	 */
 	virtual uint64_t size() = 0;
@@ -269,6 +275,15 @@ struct trace {
 	 * is undefined behaviour to call this method before calling `seek_to()`.
 	 */
 	virtual register_set get_regs() = 0;
+	/**
+	 * Iterate over the stream trace, calling the argument function once for
+	 * each trace element, continuing until either the callback returns `true`
+	 * or the stream end is reached.
+	 */
+	virtual void scan(scanner) = 0;
+	/**
+	 * Destructor.
+	 */
 	virtual ~trace();
 	/**
 	 * Constructs a new streamtrace from the specified file.

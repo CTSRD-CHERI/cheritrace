@@ -279,6 +279,18 @@ class concrete_streamtrace : public trace
 	{
 		return end-begin;
 	}
+	void scan(scanner fn)
+	{
+		uint64_t count = 0;
+		for (T i=begin ; i!=end ; ++i)
+		{
+			debug_trace_entry e = *i;
+			if (fn(e, count++))
+			{
+				return;
+			}
+		}
+	}
 	bool seek_to(uint64_t offset) override
 	{
 		if (!load_segment(offset))

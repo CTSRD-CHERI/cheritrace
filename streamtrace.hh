@@ -37,13 +37,16 @@
 #include <bitset>
 #include <functional>
 
-namespace cheri {
-namespace streamtrace {
+namespace cheri
+{
+namespace streamtrace
+{
 /**
  * Format for on-disk trace entries.  These are all stored in CHERI native
  * endian (big endian).
  */
-struct debug_trace_entry_disk {
+struct debug_trace_entry_disk
+{
 	/**
 	 * The version of the trace entry.  This is more accurately a type.
 	 */
@@ -89,7 +92,8 @@ struct debug_trace_entry_disk {
  * Format for on-disk trace entries from older versions of berictl.  These are
  * all stored in CHERI native endian (big endian).
  */
-struct debug_trace_entry_disk_v1 {
+struct debug_trace_entry_disk_v1
+{
 	/**
 	 * The version of the trace entry.  This is more accurately a type.
 	 */
@@ -129,7 +133,8 @@ static_assert(sizeof(debug_trace_entry_disk_v1) == 32,
  * are ordered by size so that they can be naturally aligned and have minimal
  * padding.
  */
-struct debug_trace_entry {
+struct debug_trace_entry
+{
 	/**
 	 * The program counter value for the current point in the trace.
 	 */
@@ -200,7 +205,8 @@ struct debug_trace_entry {
 /**
  * The values of a capability register.
  */
-struct capability_register {
+struct capability_register
+{
 	/**
 	 * The base address.
 	 */
@@ -222,7 +228,8 @@ struct capability_register {
 /**
  * A snapshot of the CHERI register set at a specific point.
  */
-struct register_set {
+struct register_set
+{
 	/**
 	 * General purpose registers, represented as 64-bit integers.  Note that
 	 * this numbers from 1: there is no point in storing the value of $0, as
@@ -242,7 +249,8 @@ struct register_set {
 /**
  * Abstract (public) superclass for a streamtrace.
  */
-struct trace {
+struct trace
+{
 	/**
 	 * Callback that is invoked while the streamtrace is being loaded.  The
 	 * parameters are a pointer to the trace that is being loaded, the number

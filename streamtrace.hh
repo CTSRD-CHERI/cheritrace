@@ -246,6 +246,8 @@ struct register_set
 	//std::bitset<31> valid_caps = 0;
 };
 
+struct trace_view;
+
 /**
  * Abstract (public) superclass for a streamtrace.
  */
@@ -265,6 +267,12 @@ struct trace
 	 * true to abort scanning, false otherwise.
 	 */
 	typedef std::function<bool(debug_trace_entry, uint64_t)> scanner;
+	/**
+	 * Predicate used for constructing trace filters.  Should return true if
+	 * the trace entry is intended to be included in the trace, false
+	 * otherwise.
+	 */
+	typedef std::function<bool(debug_trace_entry)> filter_predicate;
 	/**
 	 * Returns the number of entries in the trace.
 	 */
@@ -290,6 +298,16 @@ struct trace
 	 */
 	virtual void scan(scanner) = 0;
 	/**
+	 * Iterate over a range within the trace, invoking the callback as in the
+	 * single-argument version of this function.
+	 */
+	virtual void scan(scanner, uint64_t start, uint64_t end) = 0;
+	/**
+	 * Filter this trace and return a view that only contains instructions that
+	 * match the underlying predicate.
+	 */
+	virtual std::shared_ptr<trace_view> filter(filter_predicate) = 0;
+	/**
 	 * Destructor.
 	 */
 	virtual ~trace();
@@ -304,6 +322,18 @@ struct trace
 	 * required synchronisation is performed.
 	 */
 	static std::shared_ptr<trace> open(const std::string &file, notifier);
+};
+/**
+ * A view on a streamtrace.
+ */
+struct trace_view : public trace
+{
+	/**
+	 * Returns a new trace view that includes all of the entries in the
+	 * underlying trace (not any intermediate trace views) that are not present
+	 * in this trace.
+	 */
+	virtual std::shared_ptr<trace_view> inverted_view() = 0;
 };
 }
 } // namespace cheri

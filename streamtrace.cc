@@ -118,11 +118,286 @@ class trace_segment {
 };
 
 /**
+ * A map from a range of indexes 0-n to an increasing set of indexes to another
+ * range of linear indexes.  This is used to densely store the mapping from
+ * indexes in trace views to indexes in the underlying trace.
+ */
+class index_map
+{
+	/**
+	 * A range of indexes.
+	 */
+	struct range
+	{
+		/**
+		 * The first index in the range.
+		 */
+		uint64_t start;
+		/**
+		 * The last index in the range (not one after).
+		 */
+		uint64_t end;
+	};
+	/**
+	 * An entry in the range map.
+	 */
+	struct range_map_entry
+	{
+		/**
+		 * The source range in a range map entry.
+		 */
+		range from;
+		/**
+		 * The range that the from entry maps to.
+		 */
+		// Note: The end can always be calculated from the from field, so if
+		// profiling shows that these consume a lot of RAM then we can save
+		// memory by 25% quite easily.
+		range to;
+	};
+	/**
+	 * The type used to store the range map entries.  This needs fast random
+	 * access on a sequential store, as we will do a binary search.
+	 */
+	typedef std::vector<range_map_entry> range_map;
+	/**
+	 * The vector of ranges stored by this index map.
+	 */
+	range_map ranges;
+	/**
+	 * Private constructor, takes ownership of a temporary range map
+	 * constructed by the caller.
+	 */
+	index_map(range_map &&m) : ranges(m) {}
+	/**
+	 * Look up a source index and return an iterator to the range containing
+	 * it.
+	 */
+	decltype(ranges)::iterator find_idx(uint64_t idx)
+	{
+		auto r = std::lower_bound(ranges.begin(), ranges.end(), idx,
+			[](const range_map_entry e, const uint64_t v) {
+				return e.from.end < v;
+			});
+		return r;
+	}
+	public:
+	/**
+	 * default constructor.
+	 */
+	index_map() {}
+	/**
+	 * Range map iterator.  This is a ForwardIterator.
+	 */
+	class iterator
+	{
+		friend class index_map;
+		/**
+		 * The current index that we're looking at.
+		 */
+		uint64_t idx;
+		/**
+		 * The start of the contiguous range of source addresses that we're
+		 * inspecting.
+		 */
+		uint64_t from_base = 0;
+		/**
+		 * The start of the contiguous range of destination addresses that
+		 * corresponds to `from_base`.
+		 */
+		uint64_t to_base = 0;
+		/**
+		 * The top of the range.  One after the maximum input value in this
+		 * contiguous range.
+		 */
+		uint64_t top = 0;
+		/**
+		 * The container that this iterator refers to.
+		 */
+		index_map &container;
+		/**
+		 * After updating the index, recalculate the base and top values used
+		 * to compute the target range.
+		 */
+		inline void recalculate()
+		{
+			if ((idx >= from_base) && (idx < top))
+			{
+				return;
+			}
+			auto i = container.find_idx(idx);
+			if (i == container.ranges.end())
+			{
+				top = 0;
+				return;
+			}
+			from_base = i->from.start;
+			to_base = i->to.start;
+			top = i->from.end+1;
+		}
+		iterator(index_map &m, uint64_t i) : idx(i), container(m)
+		{
+			recalculate();
+		}
+		public:
+		/**
+		 * Pre-increment operator.
+		 */
+		iterator &operator++() {
+			idx++;
+			recalculate();
+			return *this;
+		}
+		/**
+		 * Difference with another operator.
+		 */
+		uint64_t operator-(const iterator& other) {
+			assert(&container == &other.container);
+			return idx - other.idx;
+		}
+		/**
+		 * Dereference the iterator, giving a destination index.
+		 */
+		uint64_t operator*() {
+			if (top < idx)
+			{
+				return -1;
+			}
+			return idx - from_base + to_base;
+		}
+		/**
+		 * Compare iterators for equality.  Used to determine the end of iteration.
+		 */
+		bool operator!=(iterator &other)
+		{
+			assert(&container == &other.container);
+			return idx != other.idx;
+		}
+	};
+	/**
+	 * Add a new destination address.  The new destination address is
+	 * automatically associated with a new source address that immediately
+	 * follow the last one already in the map.
+	 */
+	void push_back(uint64_t v)
+	{
+		if (ranges.size() == 0)
+		{
+			range_map_entry dst = { {0,0}, {v, v} };
+			ranges.push_back(dst);
+			return;
+		}
+		auto &e = ranges.back();
+		// If we're adding the next entry, then just stick it in the range map.
+		if (e.to.end+ 1 == v)
+		{
+			e.from.end++;
+			e.to.end++;
+			return;
+		}
+		// If there's a gap, then insert a new range.
+		range_map_entry n;
+		n.from.start = n.from.end = e.from.end+1;
+		n.to.start = n.to.end = v;
+		ranges.push_back(n);
+	}
+	/**
+	 * Returns a new map that contains all of the destination indexes that are
+	 * not in the source.  The `length` parameter gives the number of
+	 * destination indexes that exist.
+	 */
+	index_map inverted_map(uint64_t length)
+	{
+		range_map inverted;
+		if (ranges.size() == 0)
+		{
+			range_map_entry dst = { {0,length}, {0, length} };
+			inverted.push_back(dst);
+			index_map inverted_map(std::move(inverted));
+			return inverted_map;
+		}
+		const auto src = ranges.front();
+		range_map_entry dst { {0,0},{0,0}};
+		if (src.to.start == 0)
+		{
+			dst.to.start = dst.to.end = src.to.end+1;
+		}
+		else
+		{
+			dst.to.end = src.to.start-1;
+		}
+		for (auto i=ranges.begin()+1, e=ranges.end() ; i!=e ; ++i)
+		{
+			dst.to.end = i->from.start - 1;
+			dst.from.end = dst.from.start + dst.to.end - dst.to.start;
+			inverted.push_back(dst);
+			dst.from.start = dst.from.end + 1;
+			dst.from.end = dst.from.end;
+			dst.to.start = i->from.end + 1;
+		}
+		if (dst.from.start < length)
+		{
+			dst.to.end = length - 1;
+			dst.from.end = dst.from.start + dst.to.end - dst.to.start;
+			inverted.push_back(dst);
+		}
+		index_map inverted_map(std::move(inverted));
+		return inverted_map;
+	}
+	/**
+	 * Return the destination index that corresponds to this source index.
+	 * Undefined if the source index is not in this map.
+	 */
+	uint64_t operator [](uint64_t idx)
+	{
+		auto i = find_idx(idx);
+		if (i == ranges.end())
+		{
+			return -1;
+		}
+		return idx - i->from.start + i->to.start;
+	}
+	/**
+	 * Returns the number of elements in this map.
+	 */
+	uint64_t size()
+	{
+		if (ranges.size() == 0)
+		{
+			return 0;
+		}
+		return ranges.back().from.end+1;
+	}
+	/**
+	 * Iterator to the start of the map.  Iterators are dereferenced to give
+	 * *destination* addresses and so can be used to index into the target.
+	 */
+	iterator begin()
+	{
+		iterator i(*this, 0);
+		return i;
+	}
+	/**
+	 * End iterator.
+	 */
+	iterator end()
+	{
+		iterator i(*this, size());
+		return i;
+	}
+};
+
+template<class T>
+class concrete_traceview;
+
+/**
  * Concrete subclass of the streamtrace.  Manages trace segments.
  */
 template<class T>
-class concrete_streamtrace : public trace
+class concrete_streamtrace : public trace,
+                             public std::enable_shared_from_this<concrete_streamtrace<T>>
 {
+	friend class concrete_traceview<T>;
 	/**
 	 * Number of entries between keyframes.
 	 */
@@ -156,7 +431,7 @@ class concrete_streamtrace : public trace
 	 */
 	std::mutex keyframe_lock;
 	/**
-	 * Flag that we have completed computing keyframes for the entire trace. 
+	 * Flag that we have completed computing keyframes for the entire trace.
 	 */
 	std::atomic<bool>    finished_loading = { false };
 	/**
@@ -264,7 +539,7 @@ class concrete_streamtrace : public trace
 	}
 	public:
 	/**
-	 * Construct a streamtrace from two iterators.  
+	 * Construct a streamtrace from two iterators.
 	 */
 	concrete_streamtrace(T &&b, T &&e, notifier fn) : begin(b), end(e), callback(fn)
 	{
@@ -279,6 +554,23 @@ class concrete_streamtrace : public trace
 	{
 		return end-begin;
 	}
+	void scan(scanner fn, uint64_t start, uint64_t scan_end)
+	{
+		uint64_t len = end-begin;
+		if (len > start)
+		{
+			return;
+		}
+		scan_end = std::min(scan_end, len);
+		for (T i=begin+start,e=begin+scan_end ; i!=e ; ++i)
+		{
+			debug_trace_entry te = *i;
+			if (fn(te, start++))
+			{
+				return;
+			}
+		}
+	}
 	void scan(scanner fn)
 	{
 		uint64_t count = 0;
@@ -290,6 +582,21 @@ class concrete_streamtrace : public trace
 				return;
 			}
 		}
+	}
+	std::shared_ptr<trace_view> filter(filter_predicate fn) override
+	{
+		uint64_t idx = 0;
+		index_map m;
+		for (T i=begin ; i!=end ; ++i)
+		{
+			debug_trace_entry e = *i;
+			if (fn(e))
+			{
+				m.push_back(idx);
+			}
+			idx++;
+		}
+		return std::make_shared<concrete_traceview<T>>(std::enable_shared_from_this<concrete_streamtrace<T>>::shared_from_this(), std::move(m));
 	}
 	bool seek_to(uint64_t offset) override
 	{
@@ -312,6 +619,78 @@ class concrete_streamtrace : public trace
 		assert(cache);
 		assert(cache->regs.size() > segment_offset);
 		return cache->regs[segment_offset];
+	}
+};
+
+/**
+ * A `trace` subclass that refers to another trace.  This is the result of
+ * calling `trace::filter()`.
+ */
+template<class T>
+class concrete_traceview : public trace_view
+{
+	index_map indexes;
+	std::shared_ptr<concrete_streamtrace<T>> t;
+	public:
+	/**
+	 * Construct a new trace view from a concrete trace and a range of indexes
+	 * in it.  This is used even when constructing a view from a view.
+	 */
+	concrete_traceview(decltype(t) tr, index_map &&i) : indexes(i), t(tr) {}
+	uint64_t size() override
+	{
+		return indexes.size();
+	}
+	bool seek_to(uint64_t offset) override
+	{
+		return t->seek_to(indexes[offset]);
+	}
+	debug_trace_entry get_entry() override
+	{
+		return t->get_entry();
+	}
+	register_set get_regs() override
+	{
+		return t->get_regs();
+	}
+	void scan(scanner fn) override
+	{
+		scan(fn, 0, size()-1);
+	}
+	void scan(scanner fn, uint64_t start, uint64_t end) override
+	{
+		end = std::min(end, size()-1);
+		if (start > end)
+		{
+			return;
+		}
+		auto i = t->begin;
+		for (uint64_t idx : indexes)
+		{
+			// FIXME: This does a lot of redundant iterator creation
+			if (fn(*(i+idx), start++))
+			{
+				return;
+			}
+		}
+	}
+	std::shared_ptr<trace_view> filter(filter_predicate fn) override
+	{
+		auto i = t->begin;
+		index_map m;
+		for (uint64_t idx : indexes)
+		{
+			// FIXME: This does a lot of redundant iterator creation
+			if (fn(*(i+idx)))
+			{
+				m.push_back(idx);
+			}
+		}
+		return std::make_shared<concrete_traceview<T>>(t, std::move(m));
+	}
+	std::shared_ptr<trace_view> inverted_view()
+	{
+		return std::make_shared<concrete_traceview<T>>(t, indexes.inverted_map(t->size()));
 	}
 };
 
@@ -461,7 +840,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 };
 
 /**
- * Helper template for constructing the streamtrace.  
+ * Helper template for constructing the streamtrace.
  */
 template<class T> inline
 std::shared_ptr<concrete_streamtrace<streamtrace_iterator<T>>>
@@ -488,7 +867,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 			regs.valid_gprs[reg_no-1] = true;
 		}
 	}
-	// If the trace entry doesn't have a PC, it's because 
+	// If the trace entry doesn't have a PC, it's because
 	if (e.pc != 0)
 	{
 		pc = e.pc;

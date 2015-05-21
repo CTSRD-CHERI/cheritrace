@@ -4,6 +4,7 @@ set(TESTS
 	debug.cc
 	disassemble.cc
 	disassemble_object.cc
+	filter.cc
 	object.cc
 	regvalues.cc
 	scan.cc

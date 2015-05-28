@@ -240,13 +240,19 @@ class index_map
 			recalculate();
 		}
 		public:
-		/**
-		 * Pre-increment operator.
-		 */
 		iterator &operator++() {
 			idx++;
 			recalculate();
 			return *this;
+		}
+		iterator &operator+=(uint64_t off) {
+			idx+=off;
+			recalculate();
+			return *this;
+		}
+		iterator operator+(uint64_t off) {
+			iterator n(container, idx+off);
+			return n;
 		}
 		/**
 		 * Difference with another operator.
@@ -258,7 +264,7 @@ class index_map
 		/**
 		 * Dereference the iterator, giving a destination index.
 		 */
-		uint64_t operator*() {
+		uint64_t operator*() const {
 			if (top < idx)
 			{
 				return -1;
@@ -554,21 +560,31 @@ class concrete_streamtrace : public trace,
 	{
 		return end-begin;
 	}
-	void scan(scanner fn, uint64_t start, uint64_t scan_end)
+	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
 	{
 		uint64_t len = end-begin;
-		if (len > start)
+		uint64_t loop_end = std::min(scan_end+1, len);
+		if (loop_end < start)
 		{
 			return;
 		}
-		scan_end = std::min(scan_end, len);
-		for (T i=begin+start,e=begin+scan_end ; i!=e ; ++i)
+		int inc = 1;
+		// If we're scanning forwards
+		if (opts & backwards)
+		{
+			inc = -1;
+			loop_end--;
+			start--;
+			std::swap(start, loop_end);
+		}
+		for (T i=begin+start,e=begin+loop_end ; i!=e ; i+=inc)
 		{
 			debug_trace_entry te = *i;
-			if (fn(te, start++))
+			if (fn(te, start))
 			{
 				return;
 			}
+			start += inc;
 		}
 	}
 	void scan(scanner fn)
@@ -655,20 +671,34 @@ class concrete_traceview : public trace_view
 	}
 	void scan(scanner fn) override
 	{
-		scan(fn, 0, size()-1);
+		scan(fn, 0, size()-1, forewards);
 	}
-	void scan(scanner fn, uint64_t start, uint64_t end) override
+	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
 	{
-		end = std::min(end, size()-1);
-		if (start > end)
+		// FIXME: There's too much copying and pasting here.  Having this class
+		// expose iterators would allow this code to be shared with the
+		// concrete trace class.
+		uint64_t len = indexes.size();
+		uint64_t loop_end = std::min(scan_end+1, len);
+		if (loop_end < start)
 		{
 			return;
 		}
-		auto i = t->begin;
-		for (uint64_t idx : indexes)
+		int inc = 1;
+		// If we're scanning forwards
+		if (opts & backwards)
+		{
+			inc = -1;
+			loop_end--;
+			start--;
+			std::swap(start, loop_end);
+		}
+		auto trace_iter = t->begin;
+		auto begin = indexes.begin();
+		for (auto i=begin+start,e=begin+loop_end ; i!=e ; i+=inc)
 		{
 			// FIXME: This does a lot of redundant iterator creation
-			if (fn(*(i+idx), start++))
+			if (fn(*(trace_iter+(*i)), (*i)))
 			{
 				return;
 			}
@@ -824,7 +854,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	/**
 	 * Return a copy of the trace entry at the current file offset.
 	 */
-	typename Traits::format operator*() {
+	typename Traits::format operator*() const {
 		typename Traits::format buffer;
 		pread(file->fileno, (void*)&buffer, sizeof(buffer), offset);
 		return buffer;

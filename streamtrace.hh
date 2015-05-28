@@ -254,6 +254,21 @@ struct trace_view;
 struct trace
 {
 	/**
+	 * Bitmask values for defining scan options.
+	 */
+	enum scan_options
+	{
+		/**
+		 * Iterate forwards.
+		 */
+		forewards = 0,
+		/**
+		 * Iterate backwards.  The end value will still be interpreted as the
+		 * beginning point for iteration.
+		 */
+		backwards = 1
+	};
+	/**
 	 * Callback that is invoked while the streamtrace is being loaded.  The
 	 * parameters are a pointer to the trace that is being loaded, the number
 	 * of trace entries loaded so far, and whether the stream has finished
@@ -265,6 +280,11 @@ struct trace
 	 * Callback for scanning the streamtrace.  The first argument is the trace
 	 * entry, the second the index in the trace.  The function should return
 	 * true to abort scanning, false otherwise.
+	 *
+	 * Note that, whether this is invoked on a trace or a view of a trace, the
+	 * index is always the index into the underlying trace.  The scanner is
+	 * always invoked in sequential order, so may keep track of the index into
+	 * the trace view by using a variable bound to the closure.
 	 */
 	typedef std::function<bool(debug_trace_entry, uint64_t)> scanner;
 	/**
@@ -299,11 +319,13 @@ struct trace
 	virtual void scan(scanner) = 0;
 	/**
 	 * Iterate over a range within the trace, invoking the callback as in the
-	 * single-argument version of this function.
+	 * single-argument version of this function.  The final argument is a set
+	 * of flags formed by oring together values from the `scan_options`
+	 * enumeration.
 	 */
-	virtual void scan(scanner, uint64_t start, uint64_t end) = 0;
+	virtual void scan(scanner, uint64_t start, uint64_t end, int opts=0) = 0;
 	/**
-	 * Filter this trace and return a view that only contains instructions that
+	 * Filter this trace and return a view that only contains instructions that 
 	 * match the underlying predicate.
 	 */
 	virtual std::shared_ptr<trace_view> filter(filter_predicate) = 0;

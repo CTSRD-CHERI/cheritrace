@@ -18,30 +18,39 @@ static uint32_t instrs[] = {
 	0x800e003
 };
 
+template<class T>
+void check(T &trace)
+{
+	trace->scan([&](debug_trace_entry e, uint64_t idx) {
+				assert(e.pc == pcs[idx]);
+				assert(e.inst == instrs[idx]);
+				return false;
+			});
+	// Check that scanning backwards also works
+	trace->scan([&](debug_trace_entry e, uint64_t idx) {
+				assert(e.pc == pcs[idx]);
+				assert(e.inst == instrs[idx]);
+				return false;
+			}, 0, 42, cheri::streamtrace::trace::backwards);
+}
+
 int main()
 {
 	// Test opening a simple v1 format trace
 	auto trace = cheri::streamtrace::trace::open(SOURCE_PATH "/short.trace");
+	check(trace);
 	uint64_t count = 0;
 	// Check that we can filter a trace
 	auto filtered = trace->filter([&](debug_trace_entry e) {
 			return (count++ % 2) == 0; });
 	assert(filtered->size() == 3);
-	filtered->scan([&](debug_trace_entry e, uint64_t idx) {
-				assert(e.pc == pcs[idx*2]);
-				assert(e.inst == instrs[idx*2]);
-				return false;
-			});
+	check(filtered);
 	count = 0;
 	// Check that we can filter a filtered trace
 	auto filtered2 = filtered->filter([&](debug_trace_entry e) {
 			return count++ < 2; });
 	assert(filtered2->size() == 2);
-	filtered2->scan([&](debug_trace_entry e, uint64_t idx) {
-				assert(e.pc == pcs[idx*2]);
-				assert(e.inst == instrs[idx*2]);
-				return false;
-			});
+	check(filtered2);
 	auto inverted = filtered2->inverted_view();
 	return 0;
 }

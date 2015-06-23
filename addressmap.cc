@@ -68,3 +68,5 @@ std::shared_ptr<cheri::addressmap> cheri::addressmap::open_procstat(std::string 
 	}
 	return ret;
 }
+
+cheri::addressmap::~addressmap() {}

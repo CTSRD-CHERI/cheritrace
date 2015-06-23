@@ -69,6 +69,10 @@ struct function
 	 * in the host byte order.
 	 */
 	virtual uint32_t operator[](uint64_t idx) const = 0;
+	/**
+	 * Anchor for vtable.
+	 */
+	virtual ~function();
 };
 
 /**
@@ -114,6 +118,11 @@ struct file
 	 * Open an object file and return an object representing it.
 	 */
 	static std::shared_ptr<file> open(const std::string &);
+	/**
+	 * Anchor for vtable.
+	 */
+	virtual ~file();
+
 };
 
 

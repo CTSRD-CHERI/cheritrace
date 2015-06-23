@@ -252,3 +252,6 @@ line_info concrete_file::debug_info_for_address(uint64_t address)
 	line_info li = {line.FileName, line.FunctionName, line.Line, line.Column };
 	return li;
 }
+
+function::~function() {}
+file::~file() {}

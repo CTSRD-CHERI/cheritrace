@@ -48,6 +48,10 @@ struct addressmap
 	 * zero-length address range.
 	 */
 	virtual range mapping_for_address(uint64_t) = 0;
+	/**
+	 * Virtual destructor.
+	 */
+	virtual ~addressmap();
 };
 
 

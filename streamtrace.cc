@@ -334,12 +334,12 @@ class index_map
 		}
 		for (auto i=ranges.begin()+1, e=ranges.end() ; i!=e ; ++i)
 		{
-			dst.to.end = i->from.start - 1;
+			dst.to.end = i->to.start - 1;
 			dst.from.end = dst.from.start + dst.to.end - dst.to.start;
 			inverted.push_back(dst);
 			dst.from.start = dst.from.end + 1;
 			dst.from.end = dst.from.end;
-			dst.to.start = i->from.end + 1;
+			dst.to.start = i->to.end + 1;
 		}
 		if (dst.from.start < length)
 		{

@@ -192,7 +192,7 @@ class concrete_file : public file, public std::enable_shared_from_this<concrete_
 		}
 		objectFileHolder = std::move(of.get());
 		objectFile = objectFileHolder.getBinary();
-		debugInfo = llvm::DIContext::getDWARFContext(*objectFile);
+		//debugInfo = llvm::DIContext::getDWARFContext(*objectFile);
 		return true;
 	}
 	line_info debug_info_for_address(uint64_t address) override;
@@ -248,6 +248,10 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 }
 line_info concrete_file::debug_info_for_address(uint64_t address)
 {
+	if (debugInfo == nullptr)
+	{
+		return {"","",0,0};
+	}
 	auto line = debugInfo->getLineInfoForAddress(address);
 	line_info li = {line.FileName, line.FunctionName, line.Line, line.Column };
 	return li;

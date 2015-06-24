@@ -539,7 +539,7 @@ class concrete_streamtrace : public trace,
 		segment_start = offset / keyframe_interval;
 		uint64_t length = std::min(keyframe_interval, (end - begin) - segment_start);
 		T segment_begin = begin + segment_start;
-		T segment_end = segment_begin + length;
+		T segment_end = segment_begin + length + 1;
 		cache.reset(new trace_segment(disass, kf, std::move(segment_begin), std::move(segment_end)));
 		return true;
 	}

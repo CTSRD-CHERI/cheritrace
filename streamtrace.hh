@@ -312,6 +312,12 @@ struct trace
 	 */
 	virtual bool seek_to(uint64_t offset) = 0;
 	/**
+	 * Returns the instruction number for the specified index.  In a normal
+	 * trace, the return value will be the same as the argument.  In a trace
+	 * view, it will be the index within the original trace.
+	 */
+	virtual uint64_t instruction_number_for_index(uint64_t) = 0;
+	/**
 	 * Returns the current trace entry.  It is undefined behaviour to call this
 	 * method before calling `seek_to()`.
 	 */

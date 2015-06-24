@@ -560,6 +560,10 @@ class concrete_streamtrace : public trace,
 	{
 		return end-begin;
 	}
+	uint64_t instruction_number_for_index(uint64_t idx) override
+	{
+		return idx;
+	}
 	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
 	{
 		uint64_t len = end-begin;
@@ -653,6 +657,10 @@ class concrete_traceview : public trace_view
 	 * in it.  This is used even when constructing a view from a view.
 	 */
 	concrete_traceview(decltype(t) tr, index_map &&i) : indexes(i), t(tr) {}
+	uint64_t instruction_number_for_index(uint64_t idx) override
+	{
+		return indexes[idx];
+	}
 	uint64_t size() override
 	{
 		return indexes.size();

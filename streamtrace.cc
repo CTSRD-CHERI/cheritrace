@@ -396,6 +396,29 @@ class index_map
 template<class T>
 class concrete_traceview;
 
+
+bool scan_range(uint64_t &start, uint64_t &scan_end, int opts, int &outinc, uint64_t len)
+{
+	scan_end = std::min(scan_end+1, len);
+	if (scan_end < start)
+	{
+		return false;
+	}
+	outinc = 1;
+	// If we're scanning forwards
+	if (opts & cheri::streamtrace::trace::backwards)
+	{
+		outinc = -1;
+		scan_end--;
+		start--;
+		std::swap(start, scan_end);
+	}
+	return true;
+}
+/**
+ * Number of entries between keyframes.
+ */
+const uint64_t keyframe_interval = 1<<16;
 /**
  * Concrete subclass of the streamtrace.  Manages trace segments.
  */
@@ -404,10 +427,6 @@ class concrete_streamtrace : public trace,
                              public std::enable_shared_from_this<concrete_streamtrace<T>>
 {
 	friend class concrete_traceview<T>;
-	/**
-	 * Number of entries between keyframes.
-	 */
-	const uint64_t keyframe_interval = 1<<16;
 	/**
 	 * Iterators to the beginning and end of the stream.
 	 */
@@ -526,7 +545,22 @@ class concrete_streamtrace : public trace,
 		notify.wait(lock, [&]() { return finished_loading || keyframes.size() > offset; });
 		return keyframes[offset];
 	}
-	bool load_segment(uint64_t offset)
+	/**
+	 * Load a cached segment that we can iterate over.  This constructs a new
+	 * segment and so is safe to call from multiple threads (e.g. in the
+	 * `trace` methods).
+	 */
+	std::unique_ptr<trace_segment> create_segment_for_index(uint64_t offset)
+	{
+		auto kf = get_keyframe(offset);
+		segment_start = offset / keyframe_interval;
+		uint64_t length = std::min(keyframe_interval, (end - begin) - segment_start);
+		T segment_begin = begin + segment_start;
+		T segment_end = segment_begin + length + 1;
+		return std::unique_ptr<trace_segment>(new trace_segment(disass, kf,
+		                   std::move(segment_begin), std::move(segment_end)));
+	}
+	bool cache_segment(uint64_t offset)
 	{
 		if (offset / keyframe_interval == segment_start)
 		{
@@ -536,12 +570,7 @@ class concrete_streamtrace : public trace,
 		{
 			return false;
 		}
-		auto kf = get_keyframe(offset);
-		segment_start = offset / keyframe_interval;
-		uint64_t length = std::min(keyframe_interval, (end - begin) - segment_start);
-		T segment_begin = begin + segment_start;
-		T segment_end = segment_begin + length + 1;
-		cache.reset(new trace_segment(disass, kf, std::move(segment_begin), std::move(segment_end)));
+		cache = std::move(create_segment_for_index(offset));
 		return true;
 	}
 	public:
@@ -565,24 +594,14 @@ class concrete_streamtrace : public trace,
 	{
 		return idx;
 	}
-	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
+	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts) override
 	{
-		uint64_t len = end-begin;
-		uint64_t loop_end = std::min(scan_end+1, len);
-		if (loop_end < start)
+		int inc;
+		if (!scan_range(start, scan_end, opts, inc, end-begin))
 		{
 			return;
 		}
-		int inc = 1;
-		// If we're scanning forwards
-		if (opts & backwards)
-		{
-			inc = -1;
-			loop_end--;
-			start--;
-			std::swap(start, loop_end);
-		}
-		for (T i=begin+start,e=begin+loop_end ; i!=e ; i+=inc)
+		for (T i=begin+start,e=begin+scan_end ; i!=e ; i+=inc)
 		{
 			debug_trace_entry te = *i;
 			if (fn(te, start))
@@ -590,6 +609,31 @@ class concrete_streamtrace : public trace,
 				return;
 			}
 			start += inc;
+		}
+	}
+	void scan(detailed_scanner fn, uint64_t start, uint64_t scan_end, int opts=0) override
+	{
+		int inc;
+		if (!scan_range(start, scan_end, opts, inc, end-begin))
+		{
+			return;
+		}
+		uint64_t segstart = -1;
+		std::unique_ptr<trace_segment> segment;
+		for (; start<scan_end ; start+=inc)
+		{
+			if (segstart != (start / keyframe_interval))
+			{
+				segment = std::move(create_segment_for_index(start));
+				segstart = (start / keyframe_interval);
+			}
+			uint64_t offset = start % keyframe_interval;
+			auto &regs = segment->regs[offset];
+			auto &entry = segment->entries[offset];
+			if (fn(entry, regs, start))
+			{
+				break;
+			}
 		}
 	}
 	void scan(scanner fn)
@@ -621,7 +665,7 @@ class concrete_streamtrace : public trace,
 	}
 	bool seek_to(uint64_t offset) override
 	{
-		if (!load_segment(offset))
+		if (!cache_segment(offset))
 		{
 			return false;
 		}
@@ -682,25 +726,39 @@ class concrete_traceview : public trace_view
 	{
 		scan(fn, 0, size()-1, forewards);
 	}
-	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
+	void scan(detailed_scanner fn, uint64_t start, uint64_t scan_end, int opts=0) override
 	{
-		// FIXME: There's too much copying and pasting here.  Having this class
-		// expose iterators would allow this code to be shared with the
-		// concrete trace class.
-		uint64_t len = indexes.size();
-		uint64_t loop_end = std::min(scan_end+1, len);
-		if (loop_end < start)
+		int inc;
+		if (!scan_range(start, scan_end, opts, inc, indexes.size()))
 		{
 			return;
 		}
-		int inc = 1;
-		// If we're scanning forwards
-		if (opts & backwards)
+		uint64_t segstart = -1;
+		std::unique_ptr<trace_segment> segment;
+		for (; start<scan_end ; start+=inc)
 		{
-			inc = -1;
-			loop_end--;
-			start--;
-			std::swap(start, loop_end);
+			auto i = indexes[start];
+			if (segstart != (i / keyframe_interval))
+			{
+				segment = std::move(t->create_segment_for_index(i));
+				segstart = (i / keyframe_interval);
+			}
+			uint64_t offset = i % keyframe_interval;
+			auto &regs = segment->regs[offset];
+			auto &entry = segment->entries[offset];
+			if (fn(entry, regs, i))
+			{
+				break;
+			}
+		}
+	}
+	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
+	{
+		int inc;
+		uint64_t loop_end = scan_end;
+		if (!scan_range(start, loop_end, opts, inc, indexes.size()))
+		{
+			return;
 		}
 		auto trace_iter = t->begin;
 		auto begin = indexes.begin();

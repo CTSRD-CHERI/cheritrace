@@ -301,11 +301,17 @@ struct trace
 	 */
 	typedef std::function<bool(debug_trace_entry, uint64_t)> scanner;
 	/**
+	 * Variant of the streamtrace scanner that sees the register set as well as
+	 * the trace entry.
+	 */
+	typedef std::function<bool(const debug_trace_entry&, const register_set &,
+			uint64_t)> detailed_scanner;
+	/**
 	 * Predicate used for constructing trace filters.  Should return true if
 	 * the trace entry is intended to be included in the trace, false
 	 * otherwise.
 	 */
-	typedef std::function<bool(debug_trace_entry)> filter_predicate;
+	typedef std::function<bool(const debug_trace_entry&)> filter_predicate;
 	/**
 	 * Returns the number of entries in the trace.
 	 */
@@ -343,6 +349,11 @@ struct trace
 	 * enumeration.
 	 */
 	virtual void scan(scanner, uint64_t start, uint64_t end, int opts=0) = 0;
+	/**
+	 * Scan over the trace providing full detail (including accurate cycle
+	 * counts and the register set) to the scanner.
+	 */
+	virtual void scan(detailed_scanner, uint64_t, uint64_t, int opts=0) = 0;
 	/**
 	 * Filter this trace and return a view that only contains instructions that 
 	 * match the underlying predicate.

@@ -2,6 +2,7 @@
 #include <assert.h>
 
 using cheri::streamtrace::debug_trace_entry;
+using cheri::streamtrace::register_set;
 
 static uint64_t pcs[] = {
 	0xffffffff8024d188,
@@ -45,5 +46,27 @@ int main()
 				assert(e.inst == instrs[idx]);
 				return false;
 			});
+	bool regs_tested = false;
+	trace->scan([&](const debug_trace_entry &e, const register_set &regs, uint64_t idx) {
+				assert(e.pc == pcs[idx]);
+				assert(e.inst == instrs[idx]);
+				if (idx == 4)
+				{
+					auto expect_regval = [&](int reg, uint64_t val)
+						{
+							// Registers are indexed from 1 ($zero is not stored)
+							reg -= 1;
+							assert(regs.gpr[reg] == val);
+							assert(regs.valid_gprs[reg]);
+						};
+					regs_tested = true;
+					expect_regval(19, 0x7fffffe1a0LL);
+					expect_regval(18, 0x9800000002b3e000LL);
+					expect_regval(17, 0xc0000000150b7780LL);
+					expect_regval(16, 0xc0000000150b7530LL);
+				}
+				return false;
+			}, 0, 4, 0);
+	assert(regs_tested);
 	return 0;
 }

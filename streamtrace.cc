@@ -894,7 +894,7 @@ make_trace(filestream &file, off_t size, trace::notifier fn)
 
 void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &dis)
 {
-	cycles += (e.cycles - cycle_counter) % 512 + 512;
+	cycles += (e.cycles - cycle_counter) % 1024;
 	cycle_counter = e.cycles;
 	if ((e.version == 1) || e.version == 2)
 	{

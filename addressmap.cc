@@ -66,6 +66,15 @@ std::shared_ptr<cheri::addressmap> cheri::addressmap::open_procstat(std::string 
 			ret->ranges.push_back(r);
 		}
 	}
+	// Add the kernel range at the end
+	range r;
+	r.start = 0xffffffff00000000ULL;
+	r.end = 0xffffffffffffffffULL;
+	r.file_name = "kernel";
+	r.is_readable = true;
+	r.is_writeable = false;
+	r.is_executable = true;
+	ret->ranges.push_back(r);
 	return ret;
 }
 

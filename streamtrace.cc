@@ -471,9 +471,10 @@ class concrete_streamtrace : public trace,
 	{
 		assert(!finished_loading);
 		keyframe kf;
-		keyframes.push_back(kf);
 		disassembler::disassembler d;
-		int frame = keyframe_interval;
+		// On the first loop iteration, we want to push the keyframe into the
+		// list
+		int frame = 1;
 		uint64_t frames_loaded = 0;
 		for (T i=begin ; i!=end ; ++i)
 		{
@@ -483,7 +484,7 @@ class concrete_streamtrace : public trace,
 				return;
 			}
 			kf.update(*i, d);
-			if (frame-- == 0)
+			if (--frame == 0)
 			{
 				frame = keyframe_interval;
 				std::lock_guard<std::mutex> lock(keyframe_lock);
@@ -507,7 +508,7 @@ class concrete_streamtrace : public trace,
 	 * thread-safe with respect to a thread running the `preload()` method.  It
 	 * will block until preloading is finished.
 	 */
-	keyframe get_keyframe(uint64_t &offset)
+	keyframe get_keyframe(uint64_t offset)
 	{
 		offset /= keyframe_interval;
 		// This looks racy, but is permitted because finished_loading never

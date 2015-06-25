@@ -905,7 +905,8 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 			regs.valid_gprs[reg_no-1] = true;
 		}
 	}
-	// If the trace entry doesn't have a PC, it's because
+	// If the trace entry doesn't have a PC, then assume that it's not a
+	// branch or exception target and that it follows the last one.
 	if (e.pc != 0)
 	{
 		pc = e.pc;

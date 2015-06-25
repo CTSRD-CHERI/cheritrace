@@ -148,8 +148,7 @@ struct debug_trace_entry
 	 */
 	uint64_t    val2;
 	/**
-	 * The value of the cycle counter (a 10-bit counter that wraps on
-	 * overflow).
+	 * The number of cycles since the start of the streamtrace.
 	 */
 	uint64_t    cycles;
 	/**

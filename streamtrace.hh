@@ -178,12 +178,12 @@ struct debug_trace_entry
 	 * Returns true if the program counter is in the range reserved for the
 	 * kernel.
 	 */
-	bool is_kernel() { return pc >= 0xFFFFFFFF0000000; }
+	bool is_kernel() const { return pc >= 0xFFFFFFFF0000000; }
 	/**
 	 * Returns true if the program counter is in the range reserved for the
 	 * userspace programs.
 	 */
-	bool is_userspace() { return !is_kernel(); }
+	bool is_userspace() const { return !is_kernel(); }
 	/**
 	 * Constructs an in-memory trace entry from the v2 on-disk format.
 	 */

@@ -156,6 +156,10 @@ struct debug_trace_entry
 	 */
 	uint32_t    inst;
 	/**
+	 * The number of cycles between this instruction and the last.
+	 */
+	uint16_t    dead_cycles;
+	/**
 	 * The thread identifier for the hardware context that generated this trace
 	 * event.
 	 */

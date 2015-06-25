@@ -955,6 +955,7 @@ void trace_segment::add_entry(disassembler::disassembler &d,
                               keyframe &kf,
                               const debug_trace_entry &entry)
 {
+	uint64_t old_cycles = kf.cycles;
 	kf.update(entry, d);
 	entries.push_back(entry);
 	regs.push_back(kf.regs);
@@ -962,6 +963,15 @@ void trace_segment::add_entry(disassembler::disassembler &d,
 	if (e.pc == 0)
 	{
 		e.pc = kf.pc;
+	}
+	e.cycles = kf.cycles;
+	e.dead_cycles = kf.cycles - old_cycles;
+	// Don't generate negative dead cycle numbers if we've somehow ended up with
+	// two trace entries on the same cycle count (no idea why this happens, but
+	// it does in some traces).
+	if (e.dead_cycles > 0)
+	{
+		e.dead_cycles--;
 	}
 }
 

@@ -35,11 +35,13 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <algorithm>
 #include <condition_variable>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 #include <assert.h>
 
 

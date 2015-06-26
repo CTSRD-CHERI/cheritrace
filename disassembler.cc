@@ -187,7 +187,7 @@ disassembler_impl::disassembler_impl()
 
 instruction_info disassembler::disassemble(uint32_t anInstruction)
 {
-	assert(mccontext->getAsmInfo());
+	assert(pimpl->mccontext->getAsmInfo());
 	instruction_info info;
 	uint8_t instbytes[4];
 	std::memcpy(instbytes, &anInstruction, sizeof(anInstruction));

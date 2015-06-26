@@ -33,10 +33,6 @@
 #include <string>
 #include <memory>
 
-#include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCDisassembler.h"
-#include "llvm/MC/MCInstPrinter.h"
-
 #pragma once
 
 namespace cheri {
@@ -95,32 +91,23 @@ static const char* const MipsRegisterNames[] = {
 	"gp", "sp", "fp", "ra"
 };
 
+struct disassembler_impl;
+
 /**
  * Public interface to the disassembler.  Note that this is not safe to use
  * across threads.
  */
 class disassembler {
-	/**
-	 * LLVM machine code context.
-	 */
-	std::unique_ptr<llvm::MCContext> mccontext;
-	/**
-	 * LLVM disassembler.
-	 */
-	std::unique_ptr<llvm::MCDisassembler> disAsm;
-	/**
-	 * LLVM instruction printer.
-	 */
-	std::unique_ptr<llvm::MCInstPrinter> instrPrinter;
-	/**
-	 * Map from LLVM's notion of registers to something stable.
-	 */
-	int registerIndexForLLVMRegNo(unsigned regNo);
+	disassembler_impl *pimpl;
 public:
 	/**
 	 * Construct a new disassembler.
 	 */
 	disassembler();
+	/**
+	 * Destructor.
+	 */
+	~disassembler();
 	/**
 	 * Disassemble an instruction and return information about it.
 	 */

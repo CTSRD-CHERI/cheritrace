@@ -556,16 +556,16 @@ class concrete_streamtrace : public trace,
 	std::unique_ptr<trace_segment> create_segment_for_index(uint64_t offset)
 	{
 		auto kf = get_keyframe(offset);
-		segment_start = offset / keyframe_interval;
-		uint64_t length = std::min(keyframe_interval, (end - begin) - segment_start);
-		T segment_begin = begin + segment_start;
+		uint64_t segstart = (offset / keyframe_interval) * keyframe_interval;
+		uint64_t length = std::min(keyframe_interval, (end - begin) - segstart);
+		T segment_begin = begin + segstart;
 		T segment_end = segment_begin + length + 1;
 		return std::unique_ptr<trace_segment>(new trace_segment(disass, kf,
 		                   std::move(segment_begin), std::move(segment_end)));
 	}
 	bool cache_segment(uint64_t offset)
 	{
-		if (offset / keyframe_interval == segment_start)
+		if (offset / keyframe_interval == (segment_start / keyframe_interval))
 		{
 			return true;
 		}
@@ -573,6 +573,7 @@ class concrete_streamtrace : public trace,
 		{
 			return false;
 		}
+		segment_start = (offset / keyframe_interval) * keyframe_interval;
 		cache = std::move(create_segment_for_index(offset));
 		return true;
 	}

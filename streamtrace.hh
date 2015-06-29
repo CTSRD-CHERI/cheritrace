@@ -148,6 +148,13 @@ struct debug_trace_entry
 	 */
 	uint64_t    val2;
 	/**
+	 * A third version-specific value associated with the trace entry.  This
+	 * doesn't exist in the on-disk trace formats, but is required because the
+	 * in-memory version will have a real program counter set and so the `pc`
+	 * field is not available for extra storage.
+	 */
+	uint64_t    val3;
+	/**
 	 * The number of cycles since the start of the streamtrace.
 	 */
 	uint64_t    cycles;
@@ -172,11 +179,11 @@ struct debug_trace_entry
 	/**
 	 * The version of the trace entry.  This is more accurately a type.
 	 */
-	uint8_t     version:3;
+	uint8_t     version;
 	/**
 	 * The exception that fired during this instruction (0 for no exception).
 	 */
-	uint8_t     exception:5;
+	uint8_t     exception;
 	/**
 	 * Returns true if the program counter is in the range reserved for the
 	 * kernel.
@@ -199,7 +206,15 @@ struct debug_trace_entry
 		thread(cheri_byte_order_to_host(d.thread)),
 		asid(cheri_byte_order_to_host(d.asid)),
 		version(d.version),
-		exception(cheri_byte_order_to_host(d.exception)) {}
+		exception(cheri_byte_order_to_host(d.exception))
+	{
+		// Version 12 and 13 traces
+		if ((version == 12) || (version == 13))
+		{
+			val3 = pc;
+			pc = 0;
+		}
+	}
 	/**
 	 * Constructs an in-memory trace entry from the v1 on-disk format.
 	 */
@@ -233,10 +248,25 @@ struct capability_register
 	 */
 	uint64_t offset;
 	/**
+	 * The type of the capability (only applies to sealed capabilities).
+	 */
+	uint32_t type;
+	/**
 	 * A bitfield representing the capability.
 	 */
 	uint16_t permissions;
+	/**
+	 * Is the capability valid?
+	 */
+	bool valid:1;
+	/**
+	 * Is the capability unsealed?
+	 */
+	bool unsealed:1;
 };
+
+static_assert(sizeof(capability_register) <= 32,
+              "Capability register structure has grown far too big!");
 
 /**
  * A snapshot of the CHERI register set at a specific point.
@@ -254,9 +284,17 @@ struct register_set
 	 * trace.
 	 */
 	std::bitset<31> valid_gprs = 0;
-	// Enable once we're actually processing things sensibly.
-	//std::array<capability_register, 32> cap_reg;
-	//std::bitset<31> valid_caps = 0;
+	/**
+	 * Capability registers.
+	 */
+	std::array<capability_register, 32> cap_reg;
+	/**
+	 * Bitfield indicating whether the capability registers contain a known 
+	 * value.  Note that this is distinct from the `valid` field in the
+	 * `capability_register` structure, which indicates whether a known value
+	 * is a valid capability.
+	 */
+	std::bitset<32> valid_caps = 0;
 };
 
 struct trace_view;

@@ -953,19 +953,103 @@ make_trace(filestream &file, off_t size, trace::notifier fn)
 	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end), fn);
 }
 
+
+/**
+ * Extract bits in an unsigned integer value between the range high and low
+ * (inclusive).
+ */
+template<int high, int low=high, typename T>
+typename std::enable_if<std::is_unsigned<T>::value, T>::type extract_bits(T val)
+{
+	T mask = std::numeric_limits<T>::max();
+	mask >>= (sizeof(T)*8) - high - 1;
+	return (val >> low) & mask;
+}
+
+/**
+ * Expand a compressed address that appears in a CHERI streamtrace.
+ */
+uint64_t expand_address(uint32_t shrt)
+{
+	// Taken from berictl.c
+	uint64_t addr = 0;
+	uint64_t cmp = (uint64_t) shrt;
+	// Move 4 bits of the segment up to the top.
+	addr |= (cmp & 0xF0000000)<<31;
+	// If the address segment was non-zero, set the top bit also.
+	if (addr != 0) addr |= 0x8000000000000000;
+	// Shift up the top bits of the 40-bit virtual address
+	addr |= (cmp & 0x0FF00000)<<12;
+	if (addr & 0x8000000000) addr |= 0x07FFFF0000000000;
+	// Or in the bottom 20 bits of the 40-bit virtual address.
+	addr |= (cmp & 0x000FFFFF);
+	// (There will be 12 zeroed bits in the middle where address information is
+	// missing)
+	return addr;
+}
+
+/**
+ * Decode a capability register from streamtrace values.  `val2` is always
+ * `val2` from the streamtrace, but `val1` is either `val1` or `pc` depending
+ * on the trace format.
+ */
+void decode_cap(capability_register &cap, uint64_t val2, uint64_t val1)
+{
+	cap.valid = extract_bits<63>(val2);
+	cap.unsealed = extract_bits<62>(val2);
+	cap.permissions = extract_bits<61,54>(val2);
+	cap.type = extract_bits<53,32>(val2);
+	cap.offset = expand_address(extract_bits<31,0>(val2));
+	cap.base = expand_address(extract_bits<63,32>(val1));
+	cap.length = expand_address(extract_bits<31,0>(val1));
+}
+
+
 } // Anonymous namespace
 
 void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &dis)
 {
 	cycles += (e.cycles - cycle_counter) % 1024;
 	cycle_counter = e.cycles;
-	if ((e.version == 1) || e.version == 2)
+	switch (e.version)
 	{
-		int reg_no = dis.disassemble(e.inst).destination_register;
-		if ((reg_no > 0) && (reg_no < 32))
+		default:
+			break;
+		case 1:
+		case 2:
 		{
-			regs.gpr[reg_no-1] = e.val2;
-			regs.valid_gprs[reg_no-1] = true;
+			int reg_no = dis.disassemble(e.inst).destination_register;
+			if ((reg_no > 0) && (reg_no < 32))
+			{
+				reg_no--;
+				regs.gpr[reg_no] = e.val2;
+				regs.valid_gprs[reg_no] = true;
+			}
+			break;
+		}
+		case 11:
+		{
+			int reg_no = dis.disassemble(e.inst).destination_register;
+			if ((reg_no > 63) && (reg_no < 96))
+			{
+				reg_no -= 64;
+				auto &cap_reg = regs.cap_reg[reg_no];
+				decode_cap(cap_reg, e.val2, e.val1);
+				regs.valid_caps[reg_no] = true;
+			}
+			break;
+		}
+		case 12:
+		{
+			int reg_no = dis.disassemble(e.inst).destination_register;
+			if ((reg_no > 63) && (reg_no < 96))
+			{
+				reg_no -= 64;
+				auto &cap_reg = regs.cap_reg[reg_no];
+				decode_cap(cap_reg, e.val2, e.val3);
+				regs.valid_caps[reg_no] = true;
+			}
+			break;
 		}
 	}
 	// If the trace entry doesn't have a PC, then assume that it's not a

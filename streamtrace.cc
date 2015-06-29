@@ -949,6 +949,9 @@ make_trace(filestream &file, off_t size, trace::notifier fn)
 {
 	typedef streamtrace_iterator<T> iter;
 	iter begin(file, T::offset);
+	// If we have a portion at the end of a trace, then ignore it.
+	size -= (size - T::offset) % sizeof(typename T::format);
+	assert((size - T::offset) % sizeof(typename T::format) == 0);
 	iter end(file, size);
 	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end), fn);
 }

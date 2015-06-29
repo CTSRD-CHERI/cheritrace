@@ -871,6 +871,18 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 * The file that this iterator refers to.
 	 */
 	filestream file;
+	/**
+	 * Number of trace entries to buffer.
+	 */
+	static const uint64_t buffer_size = 4096;
+	/**
+	 * Buffer of trace entries read at the same time.
+	 */
+	mutable typename Traits::format buffer[buffer_size];
+	/**
+	 * The start of the buffer.
+	 */
+	mutable uint64_t buffer_start = -1;
 	public:
 	/**
 	 * Constructs an iterator from a file at a specific offset.
@@ -926,9 +938,29 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 * Return a copy of the trace entry at the current file offset.
 	 */
 	typename Traits::format operator*() const {
-		typename Traits::format buffer;
-		pread(file->fileno, (void*)&buffer, sizeof(buffer), offset);
-		return buffer;
+		if ((offset < buffer_start) ||
+		    ((buffer_start + buffer_size * sizeof(typename Traits::format)) < offset))
+		{
+			char *start = (char*)&buffer;
+			ssize_t size = sizeof(buffer);
+			off_t off = offset;
+			ssize_t ret = 0;
+			buffer_start = offset;
+			do {
+				ret = pread(file->fileno, (void*)start, size, off);
+				// pread returns 0 for EOF.  We don't care if the buffer
+				// contains some nonsense at the end, so that's fine for this.
+				if (ret == 0)
+				{
+					break;
+				}
+				assert(ret > 0);
+				size -= ret;
+				start += ret;
+				off += ret;
+			} while (size > 0);
+		}
+		return buffer[(offset - buffer_start) / sizeof(typename Traits::format)];
 	}
 	/**
 	 * Compares two iterators.  Undefined if they point to different files.

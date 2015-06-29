@@ -10,6 +10,11 @@ int main()
 	auto trace = cheri::streamtrace::trace::open(SOURCE_PATH "/short.trace");
 	assert(trace);
 	cheri::disassembler::disassembler dis;
+
+	auto result = dis.disassemble(0x2e08048);
+	assert(result.name == "	cincbase	$c0, $c28, $zero");
+	assert(result.destination_register == 64);
+
 	auto expect_asm = [&](int i, std::string str)
 		{
 			bool success = trace->seek_to(i);

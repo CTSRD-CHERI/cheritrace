@@ -71,7 +71,9 @@ struct instruction_info {
 	 */
 	bool has_delay_slot = false;
 	/**
-	 * Which register is the destination for this instruction?
+	 * Which register is the destination for this instruction?  GPRs are
+	 * numbered 0-31, floating point registers from 32-63, capability registers
+	 * from 64-95.
 	 */
 	int destination_register = -1;
 };

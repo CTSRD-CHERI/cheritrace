@@ -66,6 +66,26 @@ static int registerIndexForString(const char *str)
 		str++;
 	}
 	char *end;
+	if (str[0] == 'c')
+	{
+		str++;
+		long idx = strtol(str, &end, 10);
+		if (str == end)
+		{
+			return -1;
+		}
+		return idx + 64;
+	}
+	if (str[0] == 'f')
+	{
+		str++;
+		long idx = strtol(str, &end, 10);
+		if (str == end)
+		{
+			return -1;
+		}
+		return idx + 32;
+	}
 	long idx = strtol(str, &end, 10);
 	if (str != end)
 	{

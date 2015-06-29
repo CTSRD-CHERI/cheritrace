@@ -875,7 +875,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	/**
 	 * Constructs an iterator from a file at a specific offset.
 	 */
-	streamtrace_iterator(filestream f, int o) : offset(o), file(f) {}
+	streamtrace_iterator(filestream f, uint64_t o) : offset(o), file(f) {}
 	/**
 	 * Copy constructor.
 	 */

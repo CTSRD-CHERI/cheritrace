@@ -37,7 +37,8 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Object/ObjectFile.h"
-#include "llvm/DebugInfo/DWARF/DIContext.h"
+#include "llvm/Object/ELFObjectFile.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler.h"
@@ -175,7 +176,7 @@ class concrete_file : public file, public std::enable_shared_from_this<concrete_
 	 * Debug info context associated with the file.  Used to implement the
 	 * `debug_info_for_address()` method.
 	 */
-	llvm::DIContext *debugInfo = nullptr;
+	std::unique_ptr<llvm::DWARFContext> debugInfo = nullptr;
 	public:
 	std::shared_ptr<function> function_at_address(uint64_t address) override;
 	/**
@@ -192,7 +193,7 @@ class concrete_file : public file, public std::enable_shared_from_this<concrete_
 		}
 		objectFileHolder = std::move(of.get());
 		objectFile = objectFileHolder.getBinary();
-		//debugInfo = llvm::DIContext::getDWARFContext(*objectFile);
+		debugInfo.reset(new llvm::DWARFContextInMemory(*objectFile));
 		return true;
 	}
 	line_info debug_info_for_address(uint64_t address) override;
@@ -219,11 +220,11 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 	// See if we can find a symbol with the correct name
 	for (const SymbolRef &sym : objectFile->symbols())
 	{
-		uint64_t start, size;
+		uint64_t start;
+		uint64_t size = ELFSymbolRef(sym).getSize();
+
 		if (sym.getAddress(start)
 		    || 
-		    sym.getSize(size)
-		    ||
 		    ((start > address) || (address > (start+size))))
 		{
 			continue;

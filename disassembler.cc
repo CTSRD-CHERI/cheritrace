@@ -59,7 +59,8 @@ namespace llvm {
 }
 using llvm::MipsInsts;
 
-static int registerIndexForString(const char *str)
+namespace {
+int registerIndexForString(const char *str)
 {
 	if (str[0] == '$')
 	{
@@ -100,6 +101,9 @@ static int registerIndexForString(const char *str)
 	}
 	return -1;
 }
+std::unique_ptr<const llvm::MCSubtargetInfo> sti;
+} // Anonymous namespace
+
 namespace cheri {
 namespace disassembler{
 struct disassembler_impl 
@@ -148,10 +152,10 @@ disassembler_impl::disassembler_impl()
 {
 	static const llvm::Target *target;
 	static std::unique_ptr<const llvm::MCAsmInfo> asmInfo;
-	static std::unique_ptr<const llvm::MCSubtargetInfo> sti;
 	static std::unique_ptr<const llvm::MCInstrInfo> mii;
 	static std::unique_ptr<const llvm::MCInstrAnalysis> mia;
 	static std::once_flag flag;
+	static llvm::Triple targetTriple;
 
 	LLVMInitializeMipsTargetInfo();
 	LLVMInitializeMipsTargetMC();
@@ -183,6 +187,7 @@ disassembler_impl::disassembler_impl()
 				MRI = target->createMCRegInfo(triple);
 			}
 		}
+		targetTriple = llvm::Triple(triple);
 		assert(MRI != 0);
 		mri.reset(MRI);
 		assert(mri && "Failed to create MCRegisterInfo");
@@ -199,8 +204,8 @@ disassembler_impl::disassembler_impl()
 	mccontext.reset(new llvm::MCContext(asmInfo.get(), mri.get(), nullptr));
 	disAsm.reset(target->createMCDisassembler(*sti, *mccontext));
 	assert(disAsm && "Failed to create MCDisassembler");
-	instrPrinter.reset(target->createMCInstPrinter(
-		asmInfo->getAssemblerDialect(), *asmInfo, *mii, *mri, *sti));
+	instrPrinter.reset(target->createMCInstPrinter(targetTriple,
+		asmInfo->getAssemblerDialect(), *asmInfo, *mii, *mri));
 	assert(instrPrinter && "Failed to create MCInstPrinter");
 }
 
@@ -223,7 +228,7 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 		return std::move(info);
 	}
 	llvm::raw_string_ostream os(info.name);
-	pimpl->instrPrinter->printInst(&inst, os, "");
+	pimpl->instrPrinter->printInst(&inst, os, "", *sti);
 	os.str();
 	auto &desc = MipsInsts[inst.getOpcode()];
 	if (desc.isBranch() || desc.isCall() || desc.isReturn())

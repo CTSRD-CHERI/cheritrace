@@ -1122,7 +1122,7 @@ std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 	{
 		if (buffer[0] - (char) 0x80 != (char) 2)
 		{
-			throw std::invalid_argument("Unrecognised trace file version");
+			return nullptr;
 		}
 		ret = make_trace<trace_v2_traits>(file, size, fn);
 	}

@@ -58,6 +58,8 @@ using namespace __cxxabiv1;
 using namespace cheri;
 using namespace objectfile;
 using llvm::object::symbol_iterator;
+using llvm::ErrorOr;
+using llvm::StringRef;
 
 namespace llvm {
 	extern const llvm::MCInstrDesc MipsInsts[];
@@ -96,7 +98,7 @@ class concrete_function : public function
 	/**
 	 * The buffer.  This is a reference into data owned by the file.
 	 */
-	llvm::StringRef buffer;
+	StringRef buffer;
 	public:
 	/**
 	 * Constructor.  Creates a new function object referring to the specified
@@ -104,9 +106,9 @@ class concrete_function : public function
 	 */
 	concrete_function(std::shared_ptr<concrete_file> &&f,
 	                  uint64_t start,
-	                  llvm::StringRef contents, 
-	                  llvm::StringRef mangledName,
-	                  llvm::StringRef secName) :
+	                  StringRef contents, 
+	                  StringRef mangledName,
+	                  StringRef secName) :
 		file(f), base(start), mangled(mangledName.str()), sectionName(secName.str()),
 		buffer(contents)
 	{
@@ -217,32 +219,39 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 {
 	auto shared_this = shared_from_this();
 	using namespace llvm::object;
+	debug_info_for_address(address);
 	// See if we can find a symbol with the correct name
 	for (const SymbolRef &sym : objectFile->symbols())
 	{
-		uint64_t start;
 		uint64_t size = ELFSymbolRef(sym).getSize();
-
-		if (sym.getAddress(start)
-		    || 
-		    ((start > address) || (address > (start+size))))
+		ErrorOr<uint64_t> Start = sym.getAddress();
+		if (!Start)
 		{
 			continue;
 		}
-		llvm::StringRef name;
-		sym.getName(name);
+		uint64_t start = Start.get();
+		if ((start > address) || (address > (start+size)))
+		{
+			continue;
+		}
+		ErrorOr<StringRef> name = sym.getName();
 		section_iterator iter((SectionRef()));
-		sym.getSection(iter);
-		SectionRef sec = *iter;
-		llvm::StringRef secName, contents;
+		ErrorOr<section_iterator> section = sym.getSection();
+		if (!section)
+		{
+			continue;
+		}
+		SectionRef sec = *section.get();
+		StringRef secName;
 		sec.getName(secName);
+		StringRef contents;
 		sec.getContents(contents);
 		contents = contents.substr(start - sec.getAddress(), size);
 		return std::make_shared<concrete_function>(
 				std::move(shared_this),
 				start,
 				contents, 
-				std::move(name),
+				std::move(name.get()),
 				std::move(secName));
 	}
 	return nullptr;

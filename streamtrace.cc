@@ -640,7 +640,7 @@ class concrete_streamtrace : public trace,
 			}
 		}
 	}
-	void scan(scanner fn)
+	void scan(scanner fn) override
 	{
 		uint64_t count = 0;
 		for (T i=begin ; i!=end ; ++i)

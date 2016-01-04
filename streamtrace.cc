@@ -878,7 +878,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	/**
 	 * Buffer of trace entries read at the same time.
 	 */
-	mutable typename Traits::format buffer[buffer_size];
+	mutable std::array<typename Traits::format, buffer_size> buffer;
 	/**
 	 * The start of the buffer.
 	 */
@@ -941,8 +941,8 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 		if ((offset < buffer_start) ||
 		    ((buffer_start + buffer_size * sizeof(typename Traits::format)) < offset))
 		{
-			char *start = (char*)&buffer;
-			ssize_t size = sizeof(buffer);
+			char *start = (char*)buffer.data();
+			ssize_t size = buffer.size();
 			off_t off = offset;
 			ssize_t ret = 0;
 			buffer_start = offset;

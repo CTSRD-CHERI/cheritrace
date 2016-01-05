@@ -12,8 +12,8 @@ int main()
 	cheri::disassembler::disassembler dis;
 
 	auto result = dis.disassemble(0x2e08048);
-	assert(result.name == "	cincbase	$c0, $c28, $zero");
-	assert(result.destination_register == 64);
+	assert(result.name == "\tmtc2\t$zero, $28, 2");
+	assert(result.destination_register == 28);
 
 	auto expect_asm = [&](int i, std::string str)
 		{

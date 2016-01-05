@@ -41,6 +41,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <lzma.h>
 #include <string.h>
 #include <assert.h>
 
@@ -825,31 +826,320 @@ struct trace_v2_traits {
 };
 
 /**
- * Simple wrapper around a file descriptor.  Exists so that it can be reference
- * counted by shared_ptr and close the file once it is no longer needed.  This
- * exists because iterators want to have a stateless reference to a file.
+ * Abstract class implementing file reading.
+ *
+ * Subclasses of this read from either raw files or compressed files.
+ *
+ * All subclasses of this must be thread safe.  Any of the methods in this
+ * class can be called from any thread.
  */
-struct fd
+struct file
 {
 	/**
-	 * UNIX file descriptor.  Defaults to invalid value.
+	 * Read part of the file.  This reads `length` bytes from offset `start` in
+	 * the file, writing the result into `buffer`.  The return value is the
+	 * number of bytes read.  This is guaranteed to be `length` for any
+	 * in-bounds reads.
 	 */
-	int fileno = -1;
+	virtual size_t read(void *buffer, off_t start, size_t length) = 0;
 	/**
-	 * Construct the `fd` from a file descriptor.
+	 * Virtual destructor, allowing cleanup in subclasses.
 	 */
-	fd(int f) : fileno(f) {}
+	virtual ~file() {}
 	/**
-	 * Close the file descriptor when this is destroyed.
+	 * Returns the logical size of the file (for compressed files, this returns
+	 * the size of the uncompressed file.
 	 */
-	~fd() { close(fileno); }
+	virtual size_t size() = 0;
+	/**
+	 * Opens a named file.  This will automatically detect if the file is
+	 * xz-compressed.
+	 */
+	static std::shared_ptr<file> open(const std::string &file);
 };
+
+/**
+ * Class encapsulating an uncompressed file.
+ */
+class plain_file : public file
+{
+	/**
+	 * File descriptor for this file.
+	 */
+	int fd;
+	/**
+	 * Size of the file.  This is assumed not to change as long as this object
+	 * exists.
+	 */
+	size_t file_size;
+	size_t read(void *buffer, off_t start, size_t length) override
+	{
+		// Give up if this is out of bounds.
+		if ((start < 0) || ((size_t)start > file_size))
+		{
+			return 0;
+		}
+		// If we're trying to read past the end, read a bit less
+		if (start + length > file_size)
+		{
+			length = file_size - start;
+		}
+		size_t total = 0;
+		do
+		{
+			auto ret = pread(fd, buffer, length, start);
+			// EOF, return whatever we have.  This shouldn't be hit, but might
+			// be if someone truncates the buffer.  Also give up in the event
+			// of an error.
+			if (ret < 0)
+			{
+				break;
+			}
+			length -= ret;
+			total += ret;
+			start += ret;
+			buffer = (void*)((char*)buffer + ret);
+		} while (length > 0);
+		return total;
+	}
+	size_t size() override
+	{
+		return file_size;
+	}
+	public:
+	/**
+	 * Construct a file from a specified file descriptor.
+	 */
+	plain_file(int filedesc) : fd(filedesc)
+	{
+		assert(filedesc >= 0);
+		// Find the size of the file
+		file_size = lseek(filedesc, 0, SEEK_END);
+	}
+	/**
+	 * Open a file and return a shared pointer to an object encapsulating it.
+	 * Returns `nullptr` if opening the file fails.
+	 */
+	static std::shared_ptr<file> open(const std::string &file_name)
+	{
+		int fd = ::open(file_name.c_str(), O_RDONLY);
+		if (fd < 0)
+		{
+			return nullptr;
+		}
+		return std::make_shared<plain_file>(fd);
+	}
+	/**
+	 * Close the file descriptor on destruction.
+	 */
+	~plain_file() override
+	{
+		close(fd);
+	}
+};
+
+/**
+ * Class encapsulating an xz-compressed file.  This allows code to be agnostic
+ * as to whether it is reading from a compressed or uncompressed file.
+ */
+class xz_file : public file
+{
+	/**
+	 * A block in the compressed file, constructed from the index.
+	 */
+	struct compressed_block
+	{
+		/**
+		 * Offset of the start of the block in the compressed file.
+		 */
+		off_t compressed_start;
+		/**
+		 * Size of the block in the compressed file.
+		 */
+		size_t compressed_size;
+		/**
+		 * Offset of the start of the block as it would appear in the
+		 * uncompressed file.
+		 */
+		off_t uncompressed_start;
+		/**
+		 * Size of the block as it would appear in the uncompressed file.
+		 */
+		size_t uncompressed_size;
+	};
+	/**
+	 * Index of blocks within this file.
+	 */
+	std::vector<compressed_block> offsets;
+	/**
+	 * The file descriptor corresponding to this file.
+	 */
+	std::shared_ptr<file> compressed_file;
+	/**
+	 * The size of the uncompressed file.
+	 */
+	size_t uncompressed_size = 0;
+	/**
+	 * Flags for the stream.  We assume that there is a single stream in the
+	 * file.
+	 */
+	lzma_stream_flags stream_flags;
+	public:
+	/**
+	 * Create an `xz_file` object.  Callers are responsible for ensuring that
+	 * the file represented by `f` really is an xz file.  The `flags` parameter
+	 * is the stream flags read from the file.
+	 */
+	xz_file(std::shared_ptr<file> f, lzma_stream_flags flags) : compressed_file(f),
+		stream_flags(flags)
+	{
+		// Read the index into a temporary buffer
+		std::unique_ptr<uint8_t> index_buffer(new uint8_t[stream_flags.backward_size]);
+		compressed_file->read((void*)index_buffer.get(),
+		                      compressed_file->size() - stream_flags.backward_size - 12,
+		                      stream_flags.backward_size);
+		lzma_index *idx;
+		uint64_t mem = UINT64_MAX;
+		size_t pos = 0;
+		lzma_ret ret = lzma_index_buffer_decode(&idx, &mem, NULL,
+				index_buffer.get(), &pos, stream_flags.backward_size);
+		if (ret != LZMA_OK)
+		{
+			compressed_file = nullptr;
+			return;
+		}
+		lzma_index_iter iter;
+		lzma_index_iter_init(&iter, idx);
+		// Collect the block indexes
+		while (!lzma_index_iter_next(&iter, LZMA_INDEX_ITER_ANY))
+		{
+			struct compressed_block block;
+			block.compressed_start = iter.block.compressed_file_offset;
+			block.compressed_size = iter.block.total_size;
+			block.uncompressed_start = iter.block.uncompressed_file_offset;
+			block.uncompressed_size = iter.block.uncompressed_size;
+			offsets.push_back(block);
+		}
+		lzma_index_end(idx, NULL);
+		assert(offsets.size() > 0);
+		compressed_block &b = offsets.back();
+		// The size of the uncompressed file is the end of the last block.
+		uncompressed_size = b.uncompressed_start + b.uncompressed_size;
+	}
+	size_t size() override
+	{
+		return uncompressed_size;
+	}
+	size_t read(void *buffer, off_t start, size_t length) override
+	{
+		int block_idx = block_for_offset(start);
+		if (block_idx < 0)
+		{
+			return 0;
+		}
+		size_t copied = 0;
+		while (length > 0)
+		{
+			if (block_idx >= (int)offsets.size())
+			{
+				break;
+			}
+			auto &b = offsets[block_idx++];
+			auto data = read_block(b);
+			size_t copy_start = start - b.uncompressed_start;
+			size_t copy_length = b.uncompressed_size - copy_start;
+			copy_length = std::min(copy_length, length);
+			memcpy(buffer, data.get()+copy_start, copy_length);
+			copied += copy_length;
+			start += copy_length;
+			length -= copy_length;
+			buffer = (void*)((char*)buffer + copy_length);
+		}
+		return copied;
+	}
+	public:
+	/**
+	 * Returns the index of the block that corresponds to a particular offset,
+	 * or -1 if no block matches.
+	 */
+	int block_for_offset(off_t off)
+	{
+		auto cmp = [=](const compressed_block &a) {
+			return (a.uncompressed_start <= off) && ((a.uncompressed_start +
+						a.uncompressed_size) > (size_t)off);
+		};
+		auto it = std::find_if(offsets.begin(), offsets.end(), cmp);
+		if (it == offsets.end())
+		{
+			return -1;
+		}
+		return it - offsets.begin();
+	}
+	/**
+	 * Reads a block into a new allocation.
+	 */
+	std::unique_ptr<uint8_t> read_block(compressed_block b)
+	{
+		std::unique_ptr<uint8_t> input_buffer(new uint8_t[b.compressed_size]);
+		compressed_file->read((void*)input_buffer.get(), b.compressed_start, b.compressed_size);
+		lzma_block block;
+		lzma_filter filters[LZMA_FILTERS_MAX + 1];
+		filters[0].id = LZMA_VLI_UNKNOWN;
+		block.filters = filters;
+		block.version = 1;
+		block.check = stream_flags.check;
+		block.header_size = lzma_block_header_size_decode(*input_buffer);
+		lzma_ret ret = lzma_block_header_decode(&block, NULL, input_buffer.get());
+		if (ret != LZMA_OK)
+		{
+			return nullptr;
+		}
+		std::unique_ptr<uint8_t> output_buffer(new uint8_t[b.uncompressed_size]);
+		size_t in_pos = block.header_size;
+		size_t out_pos = 0;
+		ret = lzma_block_buffer_decode(&block, NULL, input_buffer.get(),
+				&in_pos, b.compressed_size, output_buffer.get(), &out_pos,
+				b.uncompressed_size);
+		if (ret != LZMA_OK)
+		{
+			return nullptr;
+		}
+		return output_buffer;
+	}
+	/**
+	 * Open a file.  This returns `nullptr` if the underlying file does not
+	 * appear to be xz-encoded.
+	 */
+	static std::shared_ptr<xz_file> open(std::shared_ptr<file> f)
+	{
+		uint8_t buffer[12];
+		f->read((void*)buffer, f->size()-12, 12);
+		lzma_stream_flags stream_flags;
+		lzma_ret ret = lzma_stream_footer_decode(&stream_flags, buffer);
+		if (ret != LZMA_OK)
+		{
+			return nullptr;
+		}
+		return std::make_shared<xz_file>(f, stream_flags);
+	}
+};
+
+std::shared_ptr<file> file::open(const std::string &file)
+{
+	auto raw = plain_file::open(file);
+	if (!raw)
+	{
+		return nullptr;
+	}
+	auto xz = xz_file::open(raw);
+	return xz ? xz : raw;
+}
 
 /**
  * File stream.  Within iterators, we use a shared pointer to an input file
  * stream for reading.
  */
-typedef std::shared_ptr<fd> filestream;
+typedef std::shared_ptr<file> filestream;
 
 
 /**
@@ -941,24 +1231,10 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 		if ((offset < buffer_start) ||
 		    ((buffer_start + buffer_size * sizeof(typename Traits::format)) < offset))
 		{
-			char *start = (char*)buffer.data();
-			ssize_t size = buffer.size();
-			off_t off = offset;
-			ssize_t ret = 0;
+			file->read((void*)buffer.data(),
+			           offset,
+			           buffer.size() * sizeof(typename Traits::format));
 			buffer_start = offset;
-			do {
-				ret = pread(file->fileno, (void*)start, size, off);
-				// pread returns 0 for EOF.  We don't care if the buffer
-				// contains some nonsense at the end, so that's fine for this.
-				if (ret == 0)
-				{
-					break;
-				}
-				assert(ret > 0);
-				size -= ret;
-				start += ret;
-				off += ret;
-			} while (size > 0);
 		}
 		return buffer[(offset - buffer_start) / sizeof(typename Traits::format)];
 	}
@@ -1102,17 +1378,15 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 {
 	std::shared_ptr<trace> ret;
-	int fileno = ::open(file_name.c_str(), O_RDONLY);
-	if (fileno < 0)
+	auto file = file::open(file_name);
+	if (!file)
 	{
-		return std::shared_ptr<trace>(nullptr);
+		return nullptr;
 	}
-	auto file = std::make_shared<fd>(fileno);
-	auto size = lseek(fileno, 0, SEEK_END);
+	auto size = file->size();
 	char buffer[trace_v2_traits::offset + 1];
 	buffer[trace_v2_traits::offset] = 0;
-	lseek(fileno, 0, SEEK_SET);
-	pread(fileno, (void*)&buffer, trace_v2_traits::offset, 0);
+	file->read((void*)&buffer, 0, trace_v2_traits::offset);
 	std::string header(buffer+1, sizeof("CheriStreamTrace"));
 	if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{

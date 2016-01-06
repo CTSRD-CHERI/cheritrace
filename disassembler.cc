@@ -270,6 +270,14 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 			}
 		}
 	}
+	if ((info.destination_register == -1) && desc.mayStore())
+	{
+		int regNo = pimpl->registerIndexForLLVMRegNo(inst.getOperand(0).getReg());
+		if (regNo >= 0)
+		{
+			info.destination_register = regNo;
+		}
+	}
 	return std::move(info);
 }
 

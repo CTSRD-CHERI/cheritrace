@@ -420,9 +420,11 @@ bool scan_range(uint64_t &start, uint64_t &scan_end, int opts, int &outinc, uint
 	return true;
 }
 /**
- * Number of entries between keyframes.
+ * Number of entries between keyframes.  Note that each keyframe is over 1KB
+ * (including the complete capability register set size) and making this value
+ * larger can cause significant memory use.
  */
-const uint64_t keyframe_interval = 1<<16;
+const uint64_t keyframe_interval = 1<<11;
 /**
  * Concrete subclass of the streamtrace.  Manages trace segments.
  */

@@ -76,6 +76,8 @@ if (TESTS)
 	add_subdirectory(Tests)
 endif ()
 
+add_subdirectory(Tools)
+
 if (NOT CMAKE_INSTALL_LIBDIR)
 	set(CMAKE_INSTALL_LIBDIR lib)
 endif ()

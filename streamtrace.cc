@@ -114,7 +114,7 @@ class trace_segment {
 		assert(begin != end);
 		while (begin != end)
 		{
-			debug_trace_entry entry(*begin);
+			debug_trace_entry entry(*begin, d);
 			add_entry(d, rs, entry);
 			++begin;
 		}
@@ -506,7 +506,8 @@ class concrete_streamtrace : public trace,
 			{
 				return;
 			}
-			kf.update(*i, d);
+			debug_trace_entry e(*i, d);
+			kf.update(e, d);
 			if (--frame == 0)
 			{
 				frame = keyframe_interval;
@@ -602,13 +603,14 @@ class concrete_streamtrace : public trace,
 	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts) override
 	{
 		int inc;
+		disassembler::disassembler d;
 		if (!scan_range(start, scan_end, opts, inc, end-begin))
 		{
 			return;
 		}
 		for (T i=begin+start,e=begin+scan_end ; i!=e ; i+=inc)
 		{
-			debug_trace_entry te = *i;
+			debug_trace_entry te(*i, d);
 			if (fn(te, start))
 			{
 				return;
@@ -644,9 +646,10 @@ class concrete_streamtrace : public trace,
 	void scan(scanner fn) override
 	{
 		uint64_t count = 0;
+		disassembler::disassembler d;
 		for (T i=begin ; i!=end ; ++i)
 		{
-			debug_trace_entry e = *i;
+			debug_trace_entry e(*i, d);
 			if (fn(e, count++))
 			{
 				return;
@@ -657,9 +660,10 @@ class concrete_streamtrace : public trace,
 	{
 		uint64_t idx = 0;
 		index_map m;
+		disassembler::disassembler d;
 		for (T i=begin ; i!=end ; ++i)
 		{
-			debug_trace_entry e = *i;
+			debug_trace_entry e(*i, d);
 			if (fn(e))
 			{
 				m.push_back(idx);
@@ -767,10 +771,12 @@ class concrete_traceview : public trace_view
 		}
 		auto trace_iter = t->begin;
 		auto begin = indexes.begin();
+		disassembler::disassembler d;
 		for (auto i=begin+start,e=begin+loop_end ; i!=e ; i+=inc)
 		{
 			// FIXME: This does a lot of redundant iterator creation
-			if (fn(*(trace_iter+(*i)), (*i)))
+			debug_trace_entry te(*(trace_iter+(*i)), d);
+			if (fn(te, (*i)))
 			{
 				return;
 			}
@@ -780,10 +786,12 @@ class concrete_traceview : public trace_view
 	{
 		auto i = t->begin;
 		index_map m;
+		disassembler::disassembler d;
 		for (uint64_t idx : indexes)
 		{
 			// FIXME: This does a lot of redundant iterator creation
-			if (fn(*(i+idx)))
+			debug_trace_entry te(*(i+idx), d);
+			if (fn(te))
 			{
 				m.push_back(idx);
 			}
@@ -1166,9 +1174,14 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 */
 	static const uint64_t buffer_size = 4096;
 	/**
+	 * Type used for the trace buffer.
+	 */
+	typedef std::array<typename Traits::format, buffer_size> trace_buffer;
+	/**
 	 * Buffer of trace entries read at the same time.
 	 */
-	mutable std::array<typename Traits::format, buffer_size> buffer;
+	//mutable std::unique_ptr<trace_buffer> buffer = std::unique_ptr<trace_buffer>(new trace_buffer());
+	trace_buffer buffer;
 	/**
 	 * The start of the buffer.
 	 */
@@ -1315,53 +1328,118 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val1)
 	cap.length = expand_address(extract_bits<31,0>(val1));
 }
 
+/**
+ * Decode a trace entry given the fields from the on-disk version that have
+ * variable meanings.
+ */
+void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1, uint64_t val2)
+{
+	val1 = cheri_byte_order_to_host(val1);
+	val2 = cheri_byte_order_to_host(val2);
+	switch (version)
+	{
+		default:
+			break;
+		case 1:
+		{
+			e.reg_value.gp = val2;
+			break;
+		}
+		case 2:
+		{
+			e.is_load = true;
+			e.reg_value.gp = val2;
+			e.memory_address = val1;
+			break;
+		}
+		case 3:
+		{
+			e.is_store = true;
+			e.reg_value.gp = val2;
+			e.memory_address = val1;
+			break;
+		}
+		case 11:
+		{
+			decode_cap(e.reg_value.cap, val2, val1);
+			break;
+		}
+		case 12:
+		{
+			e.is_load = true;
+			e.memory_address = val1;
+			decode_cap(e.reg_value.cap, val2, e.pc);
+			e.pc = 0;
+			break;
+		}
+		case 13:
+		{
+			e.is_store = true;
+			decode_cap(e.reg_value.cap, val2, e.pc);
+			e.memory_address = val1;
+			e.pc = 0;
+			break;
+		}
+	}
+}
 
 } // Anonymous namespace
+
+	/**
+	 * Constructs an in-memory trace entry from the v2 on-disk format.
+	 */
+debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk &d,
+		disassembler::disassembler &dis) :
+	pc(cheri_byte_order_to_host(d.pc)),
+	cycles(cheri_byte_order_to_host(d.cycles)),
+	memory_address(0),
+	inst(cheri_byte_order_to_host(d.inst)),
+	thread(cheri_byte_order_to_host(d.thread)),
+	asid(cheri_byte_order_to_host(d.asid)),
+	exception(cheri_byte_order_to_host(d.exception)),
+	is_load(0),
+	is_store(0),
+	reg_num((d.version == 4) ? 100 : dis.disassemble(inst).destination_register)
+{
+	if (d.version != 4)
+	{
+		assert(reg_num == (uint8_t)dis.disassemble(inst).destination_register);
+	}
+	decode_entry(*this, d.version, d.val1, d.val2);
+}
+/**
+ * Constructs an in-memory trace entry from the v1 on-disk format.
+ */
+debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk_v1 &d,
+		disassembler::disassembler &dis) :
+	pc(cheri_byte_order_to_host(d.pc)),
+	cycles(cheri_byte_order_to_host(d.cycles)),
+	inst(cheri_byte_order_to_host(d.inst)),
+	thread(0),
+	asid(0),
+	exception(cheri_byte_order_to_host(d.exception)),
+	is_load(0),
+	is_store(0),
+	reg_num((d.version == 4) ? 100 : dis.disassemble(inst).destination_register)
+{
+	decode_entry(*this, d.version, d.val1, d.val2);
+}
 
 void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &dis)
 {
 	cycles += (e.cycles - cycle_counter) % 1024;
 	cycle_counter = e.cycles;
-	switch (e.version)
+	if (e.gpr_number() > 0)
 	{
-		default:
-			break;
-		case 1:
-		case 2:
-		{
-			int reg_no = dis.disassemble(e.inst).destination_register;
-			if ((reg_no > 0) && (reg_no < 32))
-			{
-				reg_no--;
-				regs.gpr[reg_no] = e.val2;
-				regs.valid_gprs[reg_no] = true;
-			}
-			break;
-		}
-		case 11:
-		{
-			int reg_no = dis.disassemble(e.inst).destination_register;
-			if ((reg_no > 63) && (reg_no < 96))
-			{
-				reg_no -= 64;
-				auto &cap_reg = regs.cap_reg[reg_no];
-				decode_cap(cap_reg, e.val2, e.val1);
-				regs.valid_caps[reg_no] = true;
-			}
-			break;
-		}
-		case 12:
-		{
-			int reg_no = dis.disassemble(e.inst).destination_register;
-			if ((reg_no > 63) && (reg_no < 96))
-			{
-				reg_no -= 64;
-				auto &cap_reg = regs.cap_reg[reg_no];
-				decode_cap(cap_reg, e.val2, e.val3);
-				regs.valid_caps[reg_no] = true;
-			}
-			break;
-		}
+		int gpr = e.gpr_number();
+		regs.gpr[gpr-1] = e.reg_value.gp;
+		regs.valid_gprs[gpr-1] = true;
+	}
+	if (e.capreg_number() > 0)
+	{
+		int capr = e.capreg_number();
+		regs.cap_reg[capr-1] = e.reg_value.cap;
+		regs.valid_caps[capr-1] = true;
 	}
 	// If the trace entry doesn't have a PC, then assume that it's not a
 	// branch or exception target and that it follows the last one.

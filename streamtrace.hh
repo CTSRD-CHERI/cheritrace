@@ -39,6 +39,10 @@
 
 namespace cheri
 {
+namespace disassembler
+{
+	class disassembler;
+};
 namespace streamtrace
 {
 /**
@@ -129,108 +133,6 @@ static_assert(sizeof(debug_trace_entry_disk_v1) == 32,
 		"Debug trace record size is wrong!");
 
 /**
- * The in-memory version of the debug trace entry.  Fields in this structure
- * are ordered by size so that they can be naturally aligned and have minimal
- * padding.
- */
-struct debug_trace_entry
-{
-	/**
-	 * The program counter value for the current point in the trace.
-	 */
-	uint64_t    pc;
-	/**
-	 * A version-specific value associated with the trace entry.
-	 */
-	uint64_t    val1;
-	/**
-	 * A second version-specific value associated with the trace entry.
-	 */
-	uint64_t    val2;
-	/**
-	 * A third version-specific value associated with the trace entry.  This
-	 * doesn't exist in the on-disk trace formats, but is required because the
-	 * in-memory version will have a real program counter set and so the `pc`
-	 * field is not available for extra storage.
-	 */
-	uint64_t    val3;
-	/**
-	 * The number of cycles since the start of the streamtrace.
-	 */
-	uint64_t    cycles;
-	/**
-	 * The instruction being executed.
-	 */
-	uint32_t    inst;
-	/**
-	 * The number of cycles between this instruction and the last.
-	 */
-	uint16_t    dead_cycles;
-	/**
-	 * The thread identifier for the hardware context that generated this trace
-	 * event.
-	 */
-	uint8_t     thread;
-	/**
-	 * The address space identifier for the trace entry.  This can be used to
-	 * extract traces for individual applications.
-	 */
-	uint8_t     asid;
-	/**
-	 * The version of the trace entry.  This is more accurately a type.
-	 */
-	uint8_t     version;
-	/**
-	 * The exception that fired during this instruction (0 for no exception).
-	 */
-	uint8_t     exception;
-	/**
-	 * Returns true if the program counter is in the range reserved for the
-	 * kernel.
-	 */
-	bool is_kernel() const { return pc >= 0xFFFFFFFF0000000; }
-	/**
-	 * Returns true if the program counter is in the range reserved for the
-	 * userspace programs.
-	 */
-	bool is_userspace() const { return !is_kernel(); }
-	/**
-	 * Constructs an in-memory trace entry from the v2 on-disk format.
-	 */
-	debug_trace_entry(const debug_trace_entry_disk &d) :
-		pc(cheri_byte_order_to_host(d.pc)),
-		val1(cheri_byte_order_to_host(d.val1)),
-		val2(cheri_byte_order_to_host(d.val2)),
-		cycles(cheri_byte_order_to_host(d.cycles)),
-		inst(cheri_byte_order_to_host(d.inst)),
-		thread(cheri_byte_order_to_host(d.thread)),
-		asid(cheri_byte_order_to_host(d.asid)),
-		version(d.version),
-		exception(cheri_byte_order_to_host(d.exception))
-	{
-		// Version 12 and 13 traces
-		if ((version == 12) || (version == 13))
-		{
-			val3 = pc;
-			pc = 0;
-		}
-	}
-	/**
-	 * Constructs an in-memory trace entry from the v1 on-disk format.
-	 */
-	debug_trace_entry(const debug_trace_entry_disk_v1 &d) :
-		pc(cheri_byte_order_to_host(d.pc)),
-		val1(cheri_byte_order_to_host(d.val1)),
-		val2(cheri_byte_order_to_host(d.val2)),
-		cycles(cheri_byte_order_to_host(d.cycles)),
-		inst(cheri_byte_order_to_host(d.inst)),
-		thread(0),
-		asid(0),
-		version(d.version),
-		exception(cheri_byte_order_to_host(d.exception)) {}
-};
-
-/**
  * The values of a capability register.
  */
 struct capability_register
@@ -267,6 +169,137 @@ struct capability_register
 
 static_assert(sizeof(capability_register) <= 32,
               "Capability register structure has grown far too big!");
+
+/**
+ * The in-memory version of the debug trace entry.  Fields in this structure
+ * are ordered by size so that they can be naturally aligned and have minimal
+ * padding.
+ */
+struct debug_trace_entry
+{
+	/**
+	 * The program counter value for the current point in the trace.
+	 */
+	uint64_t    pc;
+	/**
+	 * The number of cycles since the start of the streamtrace.
+	 */
+	uint64_t    cycles;
+	/**
+	 * The value of the register that is defined by this trace entry.  This is
+	 * usually the destination register, but is the source register for loads.
+	 */
+	union
+	{
+		/**
+		 * The capability register value, if this trace entry contains a
+		 * capability register.
+		 */
+		capability_register cap;
+		/**
+		 * The general-purpose register value, if this trace entry contains a
+		 * general-purpose register.
+		 */
+		uint64_t            gp;
+	} reg_value;
+	/**
+	 * The address used for load or store instructions.
+	 */
+	uint64_t    memory_address;
+	/**
+	 * The instruction being executed.
+	 */
+	uint32_t    inst;
+	/**
+	 * The number of cycles between this instruction and the last.
+	 */
+	uint16_t    dead_cycles;
+	/**
+	 * The thread identifier for the hardware context that generated this trace
+	 * event.
+	 */
+	uint8_t     thread;
+	/**
+	 * The address space identifier for the trace entry.  This can be used to
+	 * extract traces for individual applications.
+	 */
+	uint8_t     asid;
+	/**
+	 * The exception that fired during this instruction (0 for no exception).
+	 */
+	uint8_t     exception;
+	/**
+	 * Is this a load instruction?  If so, the `address` field indicates the
+	 * source address.
+	 */
+	bool        is_load:1;
+	/**
+	 * Is this a store instruction?  If so, the `address` field indicates the
+	 * destination.
+	 */
+	bool        is_store:1;
+	/**
+	 * The register number for the register.  GPRs are numbered 0-31, floating
+	 * point registers from 32-63, capability registers from 64-95.
+	 */
+	uint8_t     reg_num:8;
+	/**
+	 * Returns the GPR number for the value stored in `reg_value`.  If this
+	 * instruction does not relate to a GPR, returns -1.
+	 */
+	int gpr_number() const
+	{
+		if (reg_num < 32)
+		{
+			return reg_num;
+		}
+		return -1;
+	}
+	/**
+	 * Returns the FPR number for the value stored in `reg_value`.  If this
+	 * instruction does not relate to a FPR, returns -1.
+	 */
+	int fpr_number() const
+	{
+		if ((reg_num > 31) && (reg_num < 64))
+		{
+			return reg_num - 32;
+		}
+		return -1;
+	}
+	/**
+	 * Returns the capability register number for the value stored in
+	 * `reg_value`.  If this instruction does not relate to a capability
+	 * register, returns -1.
+	 */
+	int capreg_number() const
+	{
+		if ((reg_num > 63) && (reg_num < 96))
+		{
+			return reg_num - 64;
+		}
+		return -1;
+	}
+	/**
+	 * Returns true if the program counter is in the range reserved for the
+	 * kernel.
+	 */
+	bool is_kernel() const { return pc >= 0xFFFFFFFF0000000; }
+	/**
+	 * Returns true if the program counter is in the range reserved for the
+	 * userspace programs.
+	 */
+	bool is_userspace() const { return !is_kernel(); }
+	/**
+	 * Constructs an in-memory trace entry from the v2 on-disk format.
+	 */
+	debug_trace_entry(const debug_trace_entry_disk &d, disassembler::disassembler &dis);
+	/**
+	 * Constructs an in-memory trace entry from the v1 on-disk format.
+	 */
+	debug_trace_entry(const debug_trace_entry_disk_v1 &d, disassembler::disassembler &dis);
+};
+
 
 /**
  * A snapshot of the CHERI register set at a specific point.

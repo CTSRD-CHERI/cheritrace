@@ -976,7 +976,21 @@ class xz_file : public file
 		 * Size of the block as it would appear in the uncompressed file.
 		 */
 		size_t uncompressed_size;
+		bool operator==(const compressed_block &b)
+		{
+			return (compressed_start == b.compressed_start) &&
+			       (compressed_size == b.compressed_size) &&
+			       (uncompressed_start == b.uncompressed_start) &&
+			       (uncompressed_size == b.uncompressed_size);
+		}
 	};
+	struct cached_block
+	{
+		compressed_block metadata;
+		std::shared_ptr<uint8_t> data;
+	};
+	cached_block cache;
+	std::mutex cache_lock;
 	/**
 	 * Index of blocks within this file.
 	 */
@@ -1088,8 +1102,15 @@ class xz_file : public file
 	/**
 	 * Reads a block into a new allocation.
 	 */
-	std::unique_ptr<uint8_t> read_block(compressed_block b)
+	std::shared_ptr<uint8_t> read_block(compressed_block b)
 	{
+		{
+			std::lock_guard<std::mutex> lock(cache_lock);
+			if (b == cache.metadata)
+			{
+				return cache.data;
+			}
+		}
 		std::unique_ptr<uint8_t> input_buffer(new uint8_t[b.compressed_size]);
 		compressed_file->read((void*)input_buffer.get(), b.compressed_start, b.compressed_size);
 		lzma_block block;
@@ -1104,7 +1125,7 @@ class xz_file : public file
 		{
 			return nullptr;
 		}
-		std::unique_ptr<uint8_t> output_buffer(new uint8_t[b.uncompressed_size]);
+		std::shared_ptr<uint8_t> output_buffer(new uint8_t[b.uncompressed_size]);
 		size_t in_pos = block.header_size;
 		size_t out_pos = 0;
 		ret = lzma_block_buffer_decode(&block, NULL, input_buffer.get(),
@@ -1113,6 +1134,11 @@ class xz_file : public file
 		if (ret != LZMA_OK)
 		{
 			return nullptr;
+		}
+		{
+			std::lock_guard<std::mutex> lock(cache_lock);
+			cache.metadata = b;
+			cache.data = output_buffer;
 		}
 		return output_buffer;
 	}

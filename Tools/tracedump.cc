@@ -241,23 +241,37 @@ int main(int argc, char **argv)
 		[&](const debug_trace_entry &e, const register_set &r, uint64_t idx)
 		{
 			auto disassembly = dis.disassemble(e.inst);
-			printf("%" PRIu64 "\t{%hhu}\t0x%.16" PRIx64 "\t%s", idx, e.asid, e.pc, disassembly.name.c_str());
+			printf("%" PRIu64 "\t{%hhu}\t0x%.16" PRIx64 "\t%s", idx, e.asid,
+					e.pc, disassembly.name.c_str());
 			putchar('\n');
 			if (e.is_load)
 			{
+				int regnum = e.register_number();
+				putchar('\t');
+				if (regnum != -1)
+				{
+					printf("$%s ← ", disassembler::MipsRegisterNames[regnum]);
+				}
 				print_register(e);
 				printf(" ← Address 0x%16.16" PRIx64, e.memory_address);
+				putchar('\n');
 			}
 			else if (e.is_store)
 			{
-				printf("Address 0x%16.16" PRIx64 " ← ", e.memory_address);
+				printf("\tAddress 0x%16.16" PRIx64 " ← ", e.memory_address);
 				print_register(e);
+				putchar('\n');
 			}
 			else
 			{
-				print_register(e);
+				int regnum = e.register_number();
+				if (regnum != -1)
+				{
+					printf("\t$%s ← ", disassembler::MipsRegisterNames[regnum]);
+					print_register(e);
+					putchar('\n');
+				}
 			}
-			putchar('\n');
 			if (regdump && (idx % *regdump == 0))
 			{
 				printf("Register dump:\n");

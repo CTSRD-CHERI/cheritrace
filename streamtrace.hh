@@ -243,6 +243,14 @@ struct debug_trace_entry
 	 * point registers from 32-63, capability registers from 64-95.
 	 */
 	uint8_t     reg_num:8;
+	int         register_number() const
+	{
+		if ((reg_num < 0) || (reg_num > 96))
+		{
+			return -1;
+		}
+		return reg_num;
+	}
 	/**
 	 * Returns the GPR number for the value stored in `reg_value`.  If this
 	 * instruction does not relate to a GPR, returns -1.

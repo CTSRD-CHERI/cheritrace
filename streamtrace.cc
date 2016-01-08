@@ -34,6 +34,7 @@
 #include "disassembler.hh"
 #include <thread>
 #include <mutex>
+#include <future>
 #include <atomic>
 #include <algorithm>
 #include <condition_variable>
@@ -45,6 +46,8 @@
 #include <string.h>
 #include <assert.h>
 
+#define expect(x, y)      __builtin_expect(!!(x), y)
+
 
 using namespace cheri;
 using namespace streamtrace;
@@ -52,6 +55,112 @@ using namespace streamtrace;
 trace::~trace() {}
 
 namespace {
+
+/**
+ * State object for fast enumeration, modelled on NSFastEnumerationState.  This
+ * allows the enumerated object to provide direct access to internal values.
+ */
+template<typename T, int buffer_size=4096>
+struct fast_enumeration_state
+{
+	/**
+	 * Size of the buffer inside this structure.  This allows external users to
+	 * determine the template parameter easily.
+	 */
+	static const int internal_buffer_size = buffer_size;
+	/**
+	 * State for use by the enumerated object.
+	 */
+	uintptr_t state[2] = {0,0};
+	/**
+	 * The number of elements that have been returned.
+	 */
+	size_t size = 0;
+	/**
+	 * A pointer to `size` objects of type `T`.  This is used by callers to
+	 * look up entries and can be set by callees to either:
+	 *
+	 * - The internal buffer.
+	 * - The shared buffer.
+	 * - An buffer internal to the callee.
+	 *
+	 * In all cases, the contents of the buffer must not be immutable.
+	 */
+	T *ptr = 0;
+	/**
+	 * A pointer to a buffer that the callee can use to store some other value.
+	 */
+	std::shared_ptr<T> shared_buffer;
+	/**
+	 * An internal buffer that the callee can copy data into, if required.
+	 */
+	T buffer[buffer_size];
+	/**
+	 * Begin method allowing this to be used with range-based for loops.
+	 */
+	T* begin()
+	{
+		return ptr;
+	}
+	/**
+	 * End method allowing this to be used with range-based for loops.
+	 */
+	T* end()
+	{
+		return ptr + size;
+	}
+	/**
+	 * Assignment operator.
+	 */
+	fast_enumeration_state<T,buffer_size>& operator=(const fast_enumeration_state<T,buffer_size>& o)
+	{
+		size = o.size;
+		ptr = o.ptr;
+		shared_buffer = o.shared_buffer;
+		memcpy(buffer, o.buffer, sizeof(buffer));
+		return *this;
+	}
+};
+
+/**
+ * Interface for classes that support fast enumeration.
+ */
+template<class T, int buffer_size=4096>
+struct fast_enumeration
+{
+	/**
+	 * The state for this form of fast enumeration.
+	 */
+	typedef fast_enumeration_state<T,buffer_size> enumerator;
+	/**
+	 * Method that fills in fast enumeration state starting at a specified
+	 * object.
+	 */
+	virtual bool enumerate(enumerator &e, size_t start) = 0;
+};
+
+/**
+ * Method for fast enumeration within a range.
+ */
+template<typename T, typename B>
+void fast_enumerate(B &o,
+                    std::function<bool(size_t,T&)> fn,
+                    size_t start=0,
+                    size_t end=SIZE_T_MAX)
+{
+	typename B::enumerator e;
+	while ((start < end) && o.enumerate(e, start))
+	{
+		for (T &v : e)
+		{
+			fn(start++, v);
+			if (start >= end)
+			{
+				break;
+			}
+		}
+	}
+}
 
 /**
  * Class encapsulating the machine state at a specific point in the trace.  A
@@ -774,10 +883,12 @@ class concrete_traceview : public trace_view
 		auto trace_iter = t->begin;
 		auto begin = indexes.begin();
 		disassembler::disassembler d;
+		size_t last_index = 0;
 		for (auto i=begin+start,e=begin+loop_end ; i!=e ; i+=inc)
 		{
-			// FIXME: This does a lot of redundant iterator creation
-			debug_trace_entry te(*(trace_iter+(*i)), d);
+			trace_iter += (*i - last_index);
+			last_index = *i;
+			debug_trace_entry te(*trace_iter, d);
 			if (fn(te, (*i)))
 			{
 				return;
@@ -786,13 +897,15 @@ class concrete_traceview : public trace_view
 	}
 	std::shared_ptr<trace_view> filter(filter_predicate fn) override
 	{
-		auto i = t->begin;
+		auto trace_iter = t->begin;
+		size_t last_index = 0;
 		index_map m;
 		disassembler::disassembler d;
 		for (uint64_t idx : indexes)
 		{
-			// FIXME: This does a lot of redundant iterator creation
-			debug_trace_entry te(*(i+idx), d);
+			trace_iter += (idx - last_index);
+			last_index = idx;
+			debug_trace_entry te(*trace_iter, d);
 			if (fn(te))
 			{
 				m.push_back(idx);
@@ -843,7 +956,7 @@ struct trace_v2_traits {
  * All subclasses of this must be thread safe.  Any of the methods in this
  * class can be called from any thread.
  */
-struct file
+struct file : public fast_enumeration<uint8_t>
 {
 	/**
 	 * Read part of the file.  This reads `length` bytes from offset `start` in
@@ -866,6 +979,20 @@ struct file
 	 * xz-compressed.
 	 */
 	static std::shared_ptr<file> open(const std::string &file);
+	bool enumerate(enumerator &e, size_t start) override
+	{
+		// For testing, provide an implementation of enumerate that will never
+		// return a complete dist trace entry.
+#ifdef EVIL_FILE
+		size_t bytes = read(e.buffer, start, 25);
+#else
+		size_t bytes = read(e.buffer, start, enumerator::internal_buffer_size);
+#endif
+		e.ptr = e.buffer;
+		e.size = bytes;
+		e.shared_buffer = nullptr;
+		return bytes > 0;
+	}
 };
 
 /**
@@ -976,6 +1103,10 @@ class xz_file : public file
 		 * Size of the block as it would appear in the uncompressed file.
 		 */
 		size_t uncompressed_size;
+		/**
+		 * Equality test.  Two blocks are equal if and only if all fields are
+		 * equal.
+		 */
 		bool operator==(const compressed_block &b)
 		{
 			return (compressed_start == b.compressed_start) &&
@@ -984,12 +1115,27 @@ class xz_file : public file
 			       (uncompressed_size == b.uncompressed_size);
 		}
 	};
+	/**
+	 * A structure to manage a cached (decompressed) block of data.
+	 */
 	struct cached_block
 	{
-		compressed_block metadata;
+		/**
+		 * The origin of this block.
+		 */
+		compressed_block metadata = {0,0,0,0};
+		/**
+		 * The decompressed data.
+		 */
 		std::shared_ptr<uint8_t> data;
 	};
+	/**
+	 * A single (currently) cached block.
+	 */
 	cached_block cache;
+	/**
+	 * A lock protecting the cache.
+	 */
 	std::mutex cache_lock;
 	/**
 	 * Index of blocks within this file.
@@ -1008,6 +1154,23 @@ class xz_file : public file
 	 * file.
 	 */
 	lzma_stream_flags stream_flags;
+	bool enumerate(enumerator &e, size_t start) override
+	{
+		int block_idx = block_for_offset(start);
+		if (block_idx < 0)
+		{
+			return false;
+		}
+		// TODO: If we've already loaded the relevant block for this, then just
+		// adjust the pointer.
+		compressed_block &b = offsets[block_idx];
+		e.shared_buffer = read_block(b);
+		e.ptr = e.shared_buffer.get();
+		size_t offset = start - b.uncompressed_start;
+		e.size = b.uncompressed_size - offset;
+		e.ptr += offset;
+		return true;
+	}
 	public:
 	/**
 	 * Create an `xz_file` object.  Callers are responsible for ensuring that
@@ -1025,7 +1188,7 @@ class xz_file : public file
 		lzma_index *idx;
 		uint64_t mem = UINT64_MAX;
 		size_t pos = 0;
-		lzma_ret ret = lzma_index_buffer_decode(&idx, &mem, NULL,
+		lzma_ret ret = lzma_index_buffer_decode(&idx, &mem, nullptr,
 				index_buffer.get(), &pos, stream_flags.backward_size);
 		if (ret != LZMA_OK)
 		{
@@ -1044,11 +1207,16 @@ class xz_file : public file
 			block.uncompressed_size = iter.block.uncompressed_size;
 			offsets.push_back(block);
 		}
-		lzma_index_end(idx, NULL);
+		lzma_index_end(idx, nullptr);
 		assert(offsets.size() > 0);
 		compressed_block &b = offsets.back();
 		// The size of the uncompressed file is the end of the last block.
 		uncompressed_size = b.uncompressed_start + b.uncompressed_size;
+		// We're probably going to want to start reading the file at the start,
+		// so kick off an async load of the first block.
+		std::async(std::launch::async, [&]() {
+			read_block(offsets[0]);
+		});
 	}
 	size_t size() override
 	{
@@ -1120,7 +1288,7 @@ class xz_file : public file
 		block.version = 1;
 		block.check = stream_flags.check;
 		block.header_size = lzma_block_header_size_decode(*input_buffer);
-		lzma_ret ret = lzma_block_header_decode(&block, NULL, input_buffer.get());
+		lzma_ret ret = lzma_block_header_decode(&block, nullptr, input_buffer.get());
 		if (ret != LZMA_OK)
 		{
 			return nullptr;
@@ -1128,7 +1296,7 @@ class xz_file : public file
 		std::shared_ptr<uint8_t> output_buffer(new uint8_t[b.uncompressed_size]);
 		size_t in_pos = block.header_size;
 		size_t out_pos = 0;
-		ret = lzma_block_buffer_decode(&block, NULL, input_buffer.get(),
+		ret = lzma_block_buffer_decode(&block, nullptr, input_buffer.get(),
 				&in_pos, b.compressed_size, output_buffer.get(), &out_pos,
 				b.uncompressed_size);
 		if (ret != LZMA_OK)
@@ -1184,7 +1352,9 @@ typedef std::shared_ptr<file> filestream;
  * between the two formats are provided by the `trace_v?_traits` classes.
  */
 template<class Traits>
-class streamtrace_iterator : public std::iterator<std::random_access_iterator_tag, typename Traits::format, uint64_t> {
+class streamtrace_iterator : public std::iterator<std::random_access_iterator_tag, typename Traits::format, uint64_t>
+{
+	static const size_t entry_size = sizeof(typename Traits::format);
 	/**
 	 * The type of this iterator.
 	 */
@@ -1198,22 +1368,78 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 */
 	filestream file;
 	/**
-	 * Number of trace entries to buffer.
 	 */
-	static const uint64_t buffer_size = 4096;
-	/**
-	 * Type used for the trace buffer.
-	 */
-	typedef std::array<typename Traits::format, buffer_size> trace_buffer;
-	/**
-	 * Buffer of trace entries read at the same time.
-	 */
-	//mutable std::unique_ptr<trace_buffer> buffer = std::unique_ptr<trace_buffer>(new trace_buffer());
-	trace_buffer buffer;
+	mutable file::enumerator e;
 	/**
 	 * The start of the buffer.
 	 */
 	mutable uint64_t buffer_start = -1;
+	__attribute__((noinline))
+	typename Traits::format get_slow() const {
+		if ((offset < buffer_start) ||
+		    ((buffer_start + e.size) <= offset+entry_size))
+		{
+			// If we're completely out of range, load the start.  Also do this
+			// if the start is not in range, so that we can always read
+			// forwards, which simplifies the logic here considerably (at the
+			// expense of a small number of redundant reads).
+			if ((buffer_start == (uint64_t)-1) ||
+			    ((offset + entry_size) < buffer_start) ||
+			    (offset >= buffer_start + e.size))
+			{
+				file->enumerate(e, offset);
+				buffer_start = offset;
+			}
+			// The place we're going to start loading from.  If our block
+			// boundaries are aligned, then this is the same as the offset
+			size_t load_start = offset;
+			// Small buffer where we'll copy the bytes for an unaligned value.
+			uint8_t little_buffer[entry_size];
+			// The number of bytes that we're unable to load from the start.
+			ptrdiff_t off_by_bytes = 0;
+			if ((offset >= buffer_start) && ((offset + entry_size) > buffer_start + e.size))
+			{
+				size_t start = offset - buffer_start;
+				off_by_bytes = e.size - start;
+				if (off_by_bytes != 0)
+				{
+					assert(off_by_bytes < (ptrdiff_t)entry_size);
+					assert(off_by_bytes > 0);
+					// Copy the first bytes from the end
+					memcpy(little_buffer, e.ptr + start, off_by_bytes);
+					load_start += off_by_bytes;
+				}
+			}
+			bool loaded = file->enumerate(e, load_start);
+			if (!loaded)
+			{
+				buffer_start = -1;
+				return typename Traits::format();
+			}
+			buffer_start = load_start;
+			if ((off_by_bytes > 0) || (e.size - (load_start - offset) < entry_size))
+			{
+				size_t insert_offset = off_by_bytes;
+				while (insert_offset < entry_size)
+				{
+					size_t bytes_to_copy = std::min(e.size, entry_size - insert_offset);
+					memcpy(little_buffer + insert_offset, e.ptr, bytes_to_copy);
+					insert_offset += bytes_to_copy;
+					if (insert_offset == entry_size)
+					{
+						return *reinterpret_cast<typename Traits::format*>(little_buffer);
+					}
+					assert(off_by_bytes > 0);
+					buffer_start += bytes_to_copy;
+					file->enumerate(e, buffer_start);
+				}
+				assert(0);
+			}
+			assert(offset - buffer_start + entry_size <= e.size);
+		}
+		assert(offset - buffer_start + entry_size <= e.size);
+		return *reinterpret_cast<typename Traits::format*>(e.ptr + offset - buffer_start);
+	}
 	public:
 	/**
 	 * Constructs an iterator from a file at a specific offset.
@@ -1268,16 +1494,14 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	/**
 	 * Return a copy of the trace entry at the current file offset.
 	 */
-	typename Traits::format operator*() const {
-		if ((offset < buffer_start) ||
-		    ((buffer_start + buffer_size * sizeof(typename Traits::format)) < offset))
+	__attribute__((always_inline))
+	inline typename Traits::format operator*() const {
+		if (expect((offset < buffer_start) ||
+		           ((buffer_start + e.size) <= offset+entry_size), 0))
 		{
-			file->read((void*)buffer.data(),
-			           offset,
-			           buffer.size() * sizeof(typename Traits::format));
-			buffer_start = offset;
+			return get_slow();
 		}
-		return buffer[(offset - buffer_start) / sizeof(typename Traits::format)];
+		return *reinterpret_cast<typename Traits::format*>(e.ptr + offset - buffer_start);
 	}
 	/**
 	 * Compares two iterators.  Undefined if they point to different files.

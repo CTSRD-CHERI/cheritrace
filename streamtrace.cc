@@ -45,6 +45,7 @@
 #include <lzma.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/mman.h>
 
 #define expect(x, y)      __builtin_expect(!!(x), y)
 
@@ -1000,6 +1001,7 @@ struct file : public fast_enumeration<uint8_t>
  */
 class plain_file : public file
 {
+	friend class mmap_file;
 	/**
 	 * File descriptor for this file.
 	 */
@@ -1057,7 +1059,7 @@ class plain_file : public file
 	 * Open a file and return a shared pointer to an object encapsulating it.
 	 * Returns `nullptr` if opening the file fails.
 	 */
-	static std::shared_ptr<file> open(const std::string &file_name)
+	static std::shared_ptr<plain_file> open(const std::string &file_name)
 	{
 		int fd = ::open(file_name.c_str(), O_RDONLY);
 		if (fd < 0)
@@ -1072,6 +1074,68 @@ class plain_file : public file
 	~plain_file() override
 	{
 		close(fd);
+	}
+};
+
+/**
+ * Memory mapped file.
+ */
+class mmap_file : public file
+{
+	/**
+	 * The underlying file.
+	 */
+	std::shared_ptr<plain_file> file;
+	/**
+	 * The place where this file is mapped in the address space.
+	 */
+	uint8_t *mapped;
+	size_t size() override
+	{
+		return file->size();
+	}
+	size_t read(void *buffer, off_t start, size_t length) override
+	{
+		length = std::min(length, file->size() - (size_t)start);
+		memcpy(buffer, mapped+start, length);
+		return length;
+	}
+	bool enumerate(enumerator &e, size_t start) override
+	{
+		size_t sz = file->size();
+		if (start > sz)
+		{
+			return false;
+		}
+		e.ptr = mapped + start;
+		e.size = sz - start;
+		e.shared_buffer = nullptr;
+		return true;
+	}
+	public:
+	/**
+	 * Create a memory mapped file.
+	 */
+	mmap_file(std::shared_ptr<plain_file> &f, void *m) :
+		file(f), mapped((uint8_t*)m)
+	{
+		madvise(mapped, file->size(), MADV_WILLNEED);
+	}
+	/**
+	 * Destructor, unmap the file.
+	 */
+	~mmap_file()
+	{
+		munmap(mapped, file->size());
+	}
+	static std::shared_ptr<mmap_file> open(std::shared_ptr<plain_file> f)
+	{
+		void *mapped = mmap(nullptr, f->size(), PROT_READ, MAP_PRIVATE, f->fd, 0);
+		if (mapped == MAP_FAILED)
+		{
+			return nullptr;
+		}
+		return std::make_shared<mmap_file>(f, mapped);
 	}
 };
 
@@ -1342,8 +1406,13 @@ std::shared_ptr<file> file::open(const std::string &file)
 	{
 		return nullptr;
 	}
-	auto xz = xz_file::open(raw);
-	return xz ? xz : raw;
+	std::shared_ptr<struct file> mmapped(mmap_file::open(raw));
+	if (!mmapped)
+	{
+		mmapped = raw;
+	}
+	auto xz = xz_file::open(mmapped);
+	return xz ? xz : mmapped;
 }
 
 /**

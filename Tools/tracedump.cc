@@ -214,10 +214,17 @@ inline void print_register(const debug_trace_entry &e)
 	}
 }
 
+sig_atomic_t sig_info = 0;
+void sig_info_handler(int info)
+{
+	sig_info = 1;
+}
+
 } // Anonymous namespace
 
 int main(int argc, char **argv)
 {
+	signal(SIGINFO, sig_info_handler);
 	OptionBase::handle_options(argc, argv);
 	if (!traceFile)
 	{
@@ -234,8 +241,8 @@ int main(int argc, char **argv)
 	{
 		regdump = 1;
 	}
-	uint64_t s = start.valueOr(0LL);
-	uint64_t e = end.valueOr(trace->size());
+	uint64_t first = start.valueOr(0LL);
+	uint64_t last = end.valueOr(trace->size());
 	disassembler::disassembler dis;
 	streamtrace::trace::detailed_scanner detail =
 		[&](const debug_trace_entry &e, const register_set &r, uint64_t idx)
@@ -301,7 +308,16 @@ int main(int argc, char **argv)
 					putchar('\n');
 				}
 			}
+			if (sig_info)
+			{
+				sig_info = 0;
+				uint64_t i = idx - first;
+				uint64_t total = last - first;
+				fprintf(stderr, "[%2.2f%%] Trace entry %" PRIu64 " of %" PRIu64 "\n",
+						(double)i/total*100, i, total);
+
+			}
 			return false;
 		};
-	trace->scan(detail, s, e);
+	trace->scan(detail, first, last);
 }

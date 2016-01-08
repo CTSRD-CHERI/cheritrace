@@ -86,7 +86,7 @@ struct fast_enumeration_state
 	 *
 	 * In all cases, the contents of the buffer must not be immutable.
 	 */
-	T *ptr = 0;
+	T *ptr = nullptr;
 	/**
 	 * A pointer to a buffer that the callee can use to store some other value.
 	 */

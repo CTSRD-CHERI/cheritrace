@@ -1376,20 +1376,20 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	mutable uint64_t buffer_start = -1;
 	__attribute__((noinline))
 	typename Traits::format get_slow() const {
-		if ((offset < buffer_start) ||
-		    ((buffer_start + e.size) <= offset+entry_size))
+		// If we're completely out of range, load the start.  Also do this
+		// if the start is not in range, so that we can always read
+		// forwards, which simplifies the logic here considerably (at the
+		// expense of a small number of redundant reads).
+		if ((buffer_start == (uint64_t)-1) ||
+			((offset + entry_size) < buffer_start) ||
+			(offset >= buffer_start + e.size))
 		{
-			// If we're completely out of range, load the start.  Also do this
-			// if the start is not in range, so that we can always read
-			// forwards, which simplifies the logic here considerably (at the
-			// expense of a small number of redundant reads).
-			if ((buffer_start == (uint64_t)-1) ||
-			    ((offset + entry_size) < buffer_start) ||
-			    (offset >= buffer_start + e.size))
-			{
-				file->enumerate(e, offset);
-				buffer_start = offset;
-			}
+			file->enumerate(e, offset);
+			buffer_start = offset;
+		}
+		if ((offset < buffer_start) ||
+		    ((buffer_start + e.size) < offset+entry_size))
+		{
 			// The place we're going to start loading from.  If our block
 			// boundaries are aligned, then this is the same as the offset
 			size_t load_start = offset;

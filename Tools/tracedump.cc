@@ -4,6 +4,7 @@
 #include "disassembler.hh"
 
 #include <getopt.h>
+#include <signal.h>
 #include <string>
 #include <iostream>
 #include <vector>

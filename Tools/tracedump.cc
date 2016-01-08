@@ -35,6 +35,7 @@ public:
 		}
 		std::cerr << '\n';
 	}
+	virtual ~OptionBase() {}
 	OptionBase(const char *longopt,
 	           char shortopt,
 	           int option,

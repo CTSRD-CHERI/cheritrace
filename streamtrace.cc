@@ -138,6 +138,7 @@ struct fast_enumeration
 	 * object.
 	 */
 	virtual bool enumerate(enumerator &e, size_t start) = 0;
+	virtual ~fast_enumeration() {}
 };
 
 /**

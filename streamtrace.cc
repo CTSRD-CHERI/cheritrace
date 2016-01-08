@@ -1156,18 +1156,25 @@ class xz_file : public file
 	lzma_stream_flags stream_flags;
 	bool enumerate(enumerator &e, size_t start) override
 	{
-		int block_idx = block_for_offset(start);
-		if (block_idx < 0)
+		// If the requested index is not within the existing buffer, load a new
+		// one.
+		if ((e.ptr == nullptr) ||
+			(e.state[0] >= start) ||
+			(e.state[0] + e.state[1] <= start))
 		{
-			return false;
+			int block_idx = block_for_offset(start);
+			if (block_idx < 0)
+			{
+				return false;
+			}
+			compressed_block &b = offsets[block_idx];
+			e.shared_buffer = read_block(b);
+			e.state[0] = b.uncompressed_start;
+			e.state[1] = b.uncompressed_size;
 		}
-		// TODO: If we've already loaded the relevant block for this, then just
-		// adjust the pointer.
-		compressed_block &b = offsets[block_idx];
-		e.shared_buffer = read_block(b);
+		size_t offset = start - e.state[0];
 		e.ptr = e.shared_buffer.get();
-		size_t offset = start - b.uncompressed_start;
-		e.size = b.uncompressed_size - offset;
+		e.size = e.state[1] - offset;
 		e.ptr += offset;
 		return true;
 	}

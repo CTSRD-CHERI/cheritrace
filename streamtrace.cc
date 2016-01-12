@@ -1767,8 +1767,8 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 	if (e.capreg_number() > 0)
 	{
 		int capr = e.capreg_number();
-		regs.cap_reg[capr-1] = e.reg_value.cap;
-		regs.valid_caps[capr-1] = true;
+		regs.cap_reg[capr] = e.reg_value.cap;
+		regs.valid_caps[capr] = true;
 	}
 	// If the trace entry doesn't have a PC, then assume that it's not a
 	// branch or exception target and that it follows the last one.

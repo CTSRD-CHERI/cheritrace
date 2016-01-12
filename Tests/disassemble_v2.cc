@@ -21,7 +21,7 @@ void test_trace(std::shared_ptr<cheri::streamtrace::trace> trace)
 	expect_asm(1, "	ld	$1, 13904($1)");
 	expect_asm(2, "	move	 $2, $4");
 	expect_asm(3, "	ld	$25, -21456($gp)");
-	expect_asm(4, "	cfromptr $c5, $c0, $zero");
+	expect_asm(4, "	cfromptr\t$c5, $c0, $zero");
 }
 
 int main()

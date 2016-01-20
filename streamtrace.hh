@@ -93,6 +93,65 @@ struct debug_trace_entry_disk
 } __attribute__((packed));
 
 /**
+ * Format for Qemu on-disk trace entries.  These are all stored in big
+ * endian.
+ */
+struct debug_trace_entry_disk_v3
+{
+	/**
+	 * The version of the trace entry.  This is more accurately a type.
+	 */
+	uint8_t     version;
+	/**
+	 * The exception that fired during this instruction (0 for no exception).
+	 */
+	uint8_t     exception;
+	/**
+	 * The value of the cycle counter (a 10-bit counter that wraps on
+	 * overflow).
+	 */
+	uint16_t    cycles;
+	/**
+	 * The instruction being executed.
+	 */
+	uint32_t    inst;
+	/**
+	 * The program counter value for the current point in the trace.
+	 */
+	uint64_t    pc;
+	/**
+	 * A version-specific value associated with the trace entry.
+	 */
+	uint64_t    val1;
+	/**
+	 * A second version-specific value associated with the trace entry.
+	 */
+	uint64_t    val2;
+	/**
+	 * A 3rd version-specific value associated with the trace entry.
+	 */
+	uint64_t    val3;
+	/**
+	 * A 4th version-specific value associated with the trace entry.
+	 */
+	uint64_t    val4;
+	/**
+	 * A 5th version-specific value associated with the trace entry.
+	 */
+	uint64_t    val5;
+	/**
+	 * The thread identifier for the hardware context that generated this trace
+	 * event.
+	 */
+	uint8_t     thread;
+	/**
+	 * The address space identifier for the trace entry.  This can be used to
+	 * extract traces for individual applications.
+	 */
+	uint8_t     asid;
+} __attribute__((packed));
+
+/**
  * Format for on-disk trace entries from older versions of berictl.  These are
  * all stored in CHERI native endian (big endian).
  */
@@ -302,6 +361,10 @@ struct debug_trace_entry
 	 * Constructs an in-memory trace entry from the v2 on-disk format.
 	 */
 	debug_trace_entry(const debug_trace_entry_disk &d, disassembler::disassembler &dis);
+	/**
+	 * Constructs an in-memory trace entry from the v3 on-disk format.
+	 */
+	debug_trace_entry(const debug_trace_entry_disk_v3 &d, disassembler::disassembler &dis);
 	/**
 	 * Constructs an in-memory trace entry from the v1 on-disk format.
 	 */

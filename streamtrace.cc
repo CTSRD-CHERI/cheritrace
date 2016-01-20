@@ -949,6 +949,21 @@ struct trace_v2_traits {
 	 */
 	typedef debug_trace_entry_disk format;
 };
+/**
+ * Metadata describing v3 trace files.
+ */
+struct trace_v3_traits {
+	/**
+	 * v3 traces have one byte of version number then CheriTraceV03 as a
+	 * string.
+	 */
+	static const int offset = sizeof(debug_trace_entry_disk_v3);
+	/**
+	 * Format of the trace entries.
+	 */
+	typedef debug_trace_entry_disk_v3 format;
+};
+
 
 /**
  * Abstract class implementing file reading.
@@ -1656,6 +1671,23 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val1)
 	cap.base = expand_address(extract_bits<63,32>(val1));
 	cap.length = expand_address(extract_bits<31,0>(val1));
 }
+/**
+ * Decode a capability register from streamtrace (V3) values.
+ * Caps: val2 = (tag << 63) | (otype << 32) | (perms << 1) | s << 0,
+ *  val3 = cursor, val4 = base, val5 = length
+ */
+void decode_cap(capability_register &cap, uint64_t val2, uint64_t val3,
+		uint64_t val4, uint64_t val5)
+{
+	cap.valid = extract_bits<63>(val2);
+	cap.unsealed = extract_bits<0>(val2);
+	cap.permissions = extract_bits<31,1>(val2);
+	cap.type = extract_bits<55,32>(val2);
+	cap.base = val4;
+	cap.length = val5;
+	cap.offset = val3 - cap.base;
+}
+
 
 /**
  * Decode a trace entry given the fields from the on-disk version that have
@@ -1712,6 +1744,63 @@ void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1, uint64_t
 	}
 }
 
+/**
+ * Decode a trace entry given the fields from the on-disk version that have
+ * variable meanings.
+ */
+void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1,
+        uint64_t val2, uint64_t val3, uint64_t val4, uint64_t val5)
+{
+	val1 = cheri_byte_order_to_host(val1);
+	val2 = cheri_byte_order_to_host(val2);
+	val3 = cheri_byte_order_to_host(val3);
+	val4 = cheri_byte_order_to_host(val4);
+	val5 = cheri_byte_order_to_host(val5);
+	switch (version)
+	{
+		default:
+			break;
+		case 1:
+		{
+			e.reg_value.gp = val2;
+			break;
+		}
+		case 2:
+		{
+			e.is_load = true;
+			e.reg_value.gp = val2;
+			e.memory_address = val1;
+			break;
+		}
+		case 3:
+		{
+			e.is_store = true;
+			e.reg_value.gp = val2;
+			e.memory_address = val1;
+			break;
+		}
+		case 11:
+		{
+			decode_cap(e.reg_value.cap, val2, val3, val4, val5);
+			break;
+		}
+		case 12:
+		{
+			e.is_load = true;
+			e.memory_address = val1;
+			decode_cap(e.reg_value.cap, val2, val3, val4, val5);
+			break;
+		}
+		case 13:
+		{
+			e.is_store = true;
+			decode_cap(e.reg_value.cap, val2, val3, val4, val5);
+			e.memory_address = val1;
+			break;
+		}
+	}
+}
+
 } // Anonymous namespace
 
 	/**
@@ -1735,6 +1824,28 @@ debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk &d,
 		assert(reg_num == (uint8_t)dis.disassemble(inst).destination_register);
 	}
 	decode_entry(*this, d.version, d.val1, d.val2);
+}
+	/**
+	 * Constructs an in-memory trace entry from the v3 on-disk format.
+	 */
+debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk_v3 &d,
+		disassembler::disassembler &dis) :
+	pc(cheri_byte_order_to_host(d.pc)),
+	cycles(cheri_byte_order_to_host(d.cycles)),
+	memory_address(0),
+	inst(cheri_byte_order_to_host(d.inst)),
+	thread(cheri_byte_order_to_host(d.thread)),
+	asid(cheri_byte_order_to_host(d.asid)),
+	exception(cheri_byte_order_to_host(d.exception)),
+	is_load(0),
+	is_store(0),
+	reg_num((d.version == 4) ? 100 : dis.disassemble(inst).destination_register)
+{
+	if (d.version != 4)
+	{
+		assert(reg_num == (uint8_t)dis.disassemble(inst).destination_register);
+	}
+	decode_entry(*this, d.version, d.val1, d.val2, d.val3, d.val4, d.val5);
 }
 /**
  * Constructs an in-memory trace entry from the v1 on-disk format.
@@ -1791,11 +1902,19 @@ std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 		return nullptr;
 	}
 	auto size = file->size();
-	char buffer[trace_v2_traits::offset + 1];
-	buffer[trace_v2_traits::offset] = 0;
-	file->read((void*)&buffer, 0, trace_v2_traits::offset);
+	char buffer[trace_v3_traits::offset + 1];
+	buffer[trace_v3_traits::offset] = 0;
+	file->read((void*)&buffer, 0, trace_v3_traits::offset);
 	std::string header(buffer+1, sizeof("CheriStreamTrace"));
-	if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
+	if (strcmp(header.c_str(), "CheriTraceV03") == 0)
+	{
+		if (buffer[0] - (char) 0x80 != (char) 3)
+		{
+			return nullptr;
+		}
+		ret = make_trace<trace_v3_traits>(file, size, fn);
+	}
+	else if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{
 		ret = make_trace<trace_v1_traits>(file, size, fn);
 	}

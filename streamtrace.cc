@@ -1889,7 +1889,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 	}
 	else
 	{
-		pc = e.pc + 4;
+		pc = pc + 4;
 	}
 }
 

@@ -215,6 +215,24 @@ std::shared_ptr<file> file::open(const std::string &file)
 	return ret;
 }
 
+namespace {
+template<typename T, typename S>
+bool isInRange(S &secOrSym, T &start, T size, T address)
+{
+	ErrorOr<T> Start = secOrSym.getAddress();
+	if (!Start)
+	{
+		return false;
+	}
+	start = Start.get();
+	if ((start > address) || (address > (start+size)))
+	{
+		return false;
+	}
+	return true;
+}
+}
+
 std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 {
 	auto shared_this = shared_from_this();
@@ -224,13 +242,8 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 	for (const SymbolRef &sym : objectFile->symbols())
 	{
 		uint64_t size = ELFSymbolRef(sym).getSize();
-		ErrorOr<uint64_t> Start = sym.getAddress();
-		if (!Start)
-		{
-			continue;
-		}
-		uint64_t start = Start.get();
-		if ((start > address) || (address > (start+size)))
+		uint64_t start;
+		if (!isInRange(sym, start, size, address))
 		{
 			continue;
 		}
@@ -254,6 +267,26 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 				std::move(name.get()),
 				std::move(secName));
 	}
+	for (const SectionRef &sec : objectFile->sections())
+	{
+		uint64_t size = sec.getSize();
+		uint64_t start;
+		if (!isInRange(sec, start, size, address))
+		{
+			continue;
+		}
+		StringRef secName;
+		sec.getName(secName);
+		StringRef contents;
+		sec.getContents(contents);
+		return std::make_shared<concrete_function>(
+				std::move(shared_this),
+				start,
+				contents,
+				secName,
+				secName);
+	}
+
 	return nullptr;
 }
 line_info concrete_file::debug_info_for_address(uint64_t address)

@@ -874,7 +874,7 @@ class concrete_traceview : public trace_view
 			}
 		}
 	}
-	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts)
+	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts) override
 	{
 		int inc;
 		uint64_t loop_end = scan_end;
@@ -915,7 +915,7 @@ class concrete_traceview : public trace_view
 		}
 		return std::make_shared<concrete_traceview<T>>(t, std::move(m));
 	}
-	std::shared_ptr<trace_view> inverted_view()
+	std::shared_ptr<trace_view> inverted_view() override
 	{
 		return std::make_shared<concrete_traceview<T>>(t, indexes.inverted_map(t->size()));
 	}

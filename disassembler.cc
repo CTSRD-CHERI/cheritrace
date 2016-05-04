@@ -225,7 +225,7 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 	if (status != llvm::MCDisassembler::Success)
 	{
 		info.name = "<Unable to disassemble>";
-		return std::move(info);
+		return info;
 	}
 	llvm::raw_string_ostream os(info.name);
 	pimpl->instrPrinter->printInst(&inst, os, "", *sti);
@@ -278,7 +278,7 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 			info.destination_register = regNo;
 		}
 	}
-	return std::move(info);
+	return info;
 }
 
 /*

@@ -42,9 +42,12 @@ namespace cheri
 namespace disassembler
 {
 	class disassembler;
-};
+}
 namespace streamtrace
 {
+#ifndef SIZE_T_MAX
+#define SIZE_T_MAX SIZE_MAX
+#endif
 /**
  * Format for on-disk trace entries.  These are all stored in CHERI native
  * endian (big endian).
@@ -229,6 +232,19 @@ struct capability_register
 static_assert(sizeof(capability_register) <= 32,
               "Capability register structure has grown far too big!");
 
+union debug_trace_register
+{
+	/**
+	 * The capability register value, if this trace entry contains a
+	 * capability register.
+	 */
+	capability_register cap;
+	/**
+	 * The general-purpose register value, if this trace entry contains a
+	 * general-purpose register.
+	 */
+	uint64_t            gp;
+};
 /**
  * The in-memory version of the debug trace entry.  Fields in this structure
  * are ordered by size so that they can be naturally aligned and have minimal
@@ -248,19 +264,7 @@ struct debug_trace_entry
 	 * The value of the register that is defined by this trace entry.  This is
 	 * usually the destination register, but is the source register for loads.
 	 */
-	union
-	{
-		/**
-		 * The capability register value, if this trace entry contains a
-		 * capability register.
-		 */
-		capability_register cap;
-		/**
-		 * The general-purpose register value, if this trace entry contains a
-		 * general-purpose register.
-		 */
-		uint64_t            gp;
-	} reg_value;
+	union debug_trace_register reg_value;
 	/**
 	 * The address used for load or store instructions.
 	 */

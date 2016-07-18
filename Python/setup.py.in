@@ -1,0 +1,15 @@
+"""
+Template setup.py file for pycheritrace
+"""
+
+from distutils.core import setup, Extension
+
+if __name__ == "__main__":
+    setup(name = "pycheritrace",
+          version = "${cheritrace_VERSION}",
+          author = "David Chisnall",
+          description = "Parser library for CHERI trace files",
+          py_modules = ["pycheritrace"],
+          data_files = [("", ["${CMAKE_CURRENT_BINARY_DIR}/${SWIG_MODULE_pycheritrace_REAL_NAME}.so"])],
+          package_dir = {"": "${CMAKE_CURRENT_BINARY_DIR}"})
+                           

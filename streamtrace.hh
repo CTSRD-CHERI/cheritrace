@@ -362,6 +362,10 @@ struct debug_trace_entry
 	 */
 	bool is_userspace() const { return !is_kernel(); }
 	/**
+	 * Constructs an empty in-memory trace entry.
+	 */
+	debug_trace_entry();
+	/**
 	 * Constructs an in-memory trace entry from the v2 on-disk format.
 	 */
 	debug_trace_entry(const debug_trace_entry_disk &d, disassembler::disassembler &dis);
@@ -374,7 +378,6 @@ struct debug_trace_entry
 	 */
 	debug_trace_entry(const debug_trace_entry_disk_v1 &d, disassembler::disassembler &dis);
 };
-
 
 /**
  * A snapshot of the CHERI register set at a specific point.

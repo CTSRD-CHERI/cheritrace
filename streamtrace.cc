@@ -1866,6 +1866,19 @@ debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk_v1 &d,
 	decode_entry(*this, d.version, d.val1, d.val2);
 }
 
+debug_trace_entry::debug_trace_entry() :
+	pc(0),
+	cycles(0),
+	memory_address(0),
+	inst(0),
+	thread(0),
+	asid(0),
+	exception(0),
+	is_load(0),
+	is_store(0),
+	reg_num(0)
+{}
+
 void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &dis)
 {
 	cycles += (e.cycles - cycle_counter) % 1024;

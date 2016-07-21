@@ -2,14 +2,77 @@
 Template setup.py file for pycheritrace
 """
 
-from distutils.core import setup, Extension
+import os
+
+from distutils.command.build_py import build_py as _build_py
+from distutils.dist import Distribution as _distribution
+from distutils.core import setup
+
+class build_py(_build_py):
+    
+    def initialize_options(self):
+        super(build_py, self).initialize_options()
+        self.bin_modules = None
+
+    def finalize_options(self):
+        super(build_py, self).finalize_options()
+        self.bin_modules = self.distribution.bin_modules
+
+    def find_modules(self):
+        modules = super(build_py, self).find_modules()
+        packages = {}
+        for module in self.bin_modules:
+            path = module.split(".")
+            package = ".".join(path[0:-1]) + ""
+            module_base = path[-1]
+            try:
+                (package_dir, checked) = packages[package]
+            except KeyError:
+                package_dir = self.get_package_dir(package)
+                checked = 0
+            if not checked:
+                init_py = self.check_package(package, package_dir)
+                packages[package] = (package_dir, 1)
+                if init_py:
+                    modules.append((package, "__init__", init_py))
+
+            # XXX perhaps we should also check for just .pyc files
+            # (so greedy closed-source bastards can distribute Python
+            # modules too)
+            module_file = os.path.join(package_dir, module_base + ".so")
+            if not self.check_module(module, module_file):
+                continue
+            modules.append((package, module_base, module_file))
+        return modules
+
+    def build_module(self, module, module_file, package):
+        _,ext = os.path.splitext(module_file)
+        if ext == ".so":
+            outfile = self.get_module_outfile(self.build_lib, package, module)
+            base,ext = os.path.splitext(outfile)
+            outfile = base + ".so"
+            dir = os.path.dirname(outfile)
+            self.mkpath(dir)
+            return self.copy_file(module_file, outfile, preserve_mode=0)
+        else:
+            return super(build_py, self).build_module(module, module_file, package)
+
+class Distribution(_distribution):
+
+    def __init__(self, *args, **kwargs):
+        self.bin_modules = None
+        super(Distribution, self).__init__(*args, **kwargs)
+    
 
 if __name__ == "__main__":
-    setup(name = "pycheritrace",
+    setup(cmdclass = {"build_py": build_py},
+          distclass = Distribution,
+          name = "pycheritrace",
           version = "${cheritrace_VERSION}",
           author = "David Chisnall",
           description = "Parser library for CHERI trace files",
           py_modules = ["pycheritrace"],
-          data_files = [("", ["${CMAKE_CURRENT_BINARY_DIR}/${SWIG_MODULE_pycheritrace_REAL_NAME}.so"])],
+          bin_modules = ["${SWIG_MODULE_pycheritrace_REAL_NAME}"],
+#          data_files = [("", ["${CMAKE_CURRENT_BINARY_DIR}/${SWIG_MODULE_pycheritrace_REAL_NAME}.so"])],
           package_dir = {"": "${CMAKE_CURRENT_BINARY_DIR}"})
                            

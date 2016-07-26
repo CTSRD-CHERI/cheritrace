@@ -6,6 +6,7 @@
 %include "std_array.i"
 %include "std_shared_ptr.i"
 %include "stdint.i"
+
 %include "std_bitset.i"
 
 %{
@@ -26,22 +27,6 @@
 %template (CapArray) std::array<struct cheri::streamtrace::capability_register, 32>;
 %template (GprBitset) std::bitset<31>;
 %template (CapBitset) std::bitset<32>;
-
-/* %typemap(in) (cheri::streamtrace::trace::scanner) { */
-/*   printf("TYPEMAP\n"); */
-/*   if (!SwigPyObject_Check($input) || */
-/*       strcmp($input->ob_type->tp_name, "Scanner") != 0) { */
-/*     PyErr_SetString(PyExc_TypeError, "Object is not an istance of Scanner."); */
-/*     $1 = NULL; */
-/*   } */
-/*   SwigPyObject *sobj = (SwigPyObject *)$input; */
-/*   cheri::streamtrace::Scanner *v = (cheri::streamtrace::Scanner *)sobj->ptr; */
-/*   auto bound_cbk = std::bind(&cheri::streamtrace::Scanner::c_scanner, */
-/* 			     v, */
-/* 			     std::placeholders::_1, */
-/* 			     std::placeholders::_2); */
-/*   $1 = cheri::streamtrace::trace::scanner(bound_cbk); */
-/* } */
 
 // SWIG does not yet support std::function
 // scanner and filter callbacks are handled via custom director classes

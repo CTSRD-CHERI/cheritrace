@@ -1889,7 +1889,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 		regs.gpr[gpr-1] = e.reg_value.gp;
 		regs.valid_gprs[gpr-1] = true;
 	}
-	if (e.capreg_number() > 0)
+	if (e.capreg_number() > 0) /* XXXAM: should it be >= or we are ignoring $c0? */
 	{
 		int capr = e.capreg_number();
 		regs.cap_reg[capr] = e.reg_value.cap;

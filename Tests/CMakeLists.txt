@@ -12,7 +12,8 @@ set(TESTS
 	shared_object.cc
 	simple.cc
 	simple_v2.cc
-	disassemble_v2.cc)
+	disassemble_v2.cc
+	csetbounds.cc)
 
 foreach(TEST_SOURCE ${TESTS})
 	get_filename_component(TEST ${TEST_SOURCE} NAME_WE)

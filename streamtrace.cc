@@ -37,6 +37,7 @@
 #include <future>
 #include <atomic>
 #include <algorithm>
+#include <limits>
 #include <condition_variable>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -148,7 +149,7 @@ template<typename T, typename B>
 void fast_enumerate(B &o,
                     std::function<bool(size_t,T&)> fn,
                     size_t start=0,
-                    size_t end=SIZE_T_MAX)
+                    size_t end=std::numeric_limits<size_t>::max())
 {
 	typename B::enumerator e;
 	while ((start < end) && o.enumerate(e, start))

@@ -226,7 +226,12 @@ void sig_info_handler(int info)
 
 int main(int argc, char **argv)
 {
+#ifdef SIGINFO
 	signal(SIGINFO, sig_info_handler);
+#else
+	// Use SIGUSR1 on systems that don't have SIGINFO (e.g. Linux)
+	signal(SIGUSR1, sig_info_handler);
+#endif
 	OptionBase::handle_options(argc, argv);
 	if (!traceFile)
 	{

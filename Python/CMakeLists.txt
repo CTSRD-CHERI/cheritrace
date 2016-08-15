@@ -1,13 +1,12 @@
 
 file(GLOB pycheritrace_SWIG_IF "cheritrace.i")
-file(GLOB cheritrace_PY_CXX_SRCS "*.cc")
 
 option(PYTHON_BINDINGS "Build python bindings" ON)
 
 if (PYTHON_BINDINGS)
   # find python and swig
-  find_package(PythonLibs REQUIRED)
   find_package(PythonInterp REQUIRED)
+  find_package(PythonLibs REQUIRED)
   find_package(SWIG REQUIRED)
   include(${SWIG_USE_FILE})
 
@@ -27,7 +26,7 @@ if (PYTHON_BINDINGS)
 
   include_directories(${PYTHON_INCLUDE_DIRS})
   include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-  swig_add_module(pycheritrace python ${pycheritrace_SWIG_IF} ${cheritrace_PY_CXX_SRCS})
+  swig_add_module(pycheritrace python ${pycheritrace_SWIG_IF})
   swig_link_libraries(pycheritrace ${LLVM_LDFLAGS} ${LLVM_LIBS_FLAGS}
     ${LLVM_SYSTEMLIBS} ${LIBLZMA_LIBRARIES} cheritrace)
   add_dependencies(${SWIG_MODULE_pycheritrace_REAL_NAME} cheritrace)

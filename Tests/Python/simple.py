@@ -87,104 +87,81 @@ def test_scan_simple(tracefile, pcs, instrs):
     trace = pct.trace.open(tracefile)
     assert trace is not None, "Failed to open tracefile %s" % tracefile
 
-    class py_scanner(pct.Scanner):
-        def run(self, e, idx):
-            assert e.pc == pcs[idx]
-            assert e.inst == instrs[idx]
-            return False
+    def scanner(e, idx):
+        assert e.pc == pcs[idx]
+        assert e.inst == instrs[idx]
+        return False
 
-    # XXX: is it really needed? The scan method does not keep a reference
-    # to the scanner after it completes
-    scanner = py_scanner().__disown__() 
-    trace.scan_trace(scanner)
-    trace.scan_trace(scanner, 0, 42, pct.trace.backwards)
-
+    trace.scan(scanner)
+    trace.scan(scanner, 0, 42, pct.trace.backwards)
+    
 def test_filter(tracefile, pcs, instrs):
 
     trace = pct.trace.open(tracefile)
     assert trace is not None, "Failed to open tracefile %s" % tracefile
 
-    class py_filter(pct.Filter):
-        count = 0
+    context = {
+        "count": 0
+    }
         
-        def run(self, e):
-            keep = (py_filter.count % 2) == 0
-            py_filter.count += 1
-            return keep
+    def filter_1(e):
+        keep = (context["count"] % 2) == 0
+        context["count"] += 1
+        return keep
 
-    class py_filter_2(pct.Filter):
-        count = 0
-        
-        def run(self, e):
-            keep = py_filter_2.count < 2
-            py_filter_2.count += 1
-            return keep
+    def filter_2(e):
+        keep = context["count"] < 2
+        context["count"] += 1
+        return keep
 
-    class py_scanner(pct.Scanner):
-        def run(self, e, idx):
-            assert e.pc == pcs[idx]
-            assert e.inst == instrs[idx]
-            return False
-
-    # XXX: is it really needed? See scan()
-    _filter = py_filter().__disown__()
-    _filter2 = py_filter_2().__disown__()
-    scanner = py_scanner().__disown__()
+    def scanner(e, idx):
+        assert e.pc == pcs[idx]
+        assert e.inst == instrs[idx]
+        return False
 
     # filter once
-    filtered = trace.filter_trace(_filter)
+    filtered = trace.filter(filter_1)
     assert filtered.size() == 3
-    filtered.scan_trace(scanner)
-
+    filtered.scan(scanner)
+    # reset context
+    context["count"] = 0
+    
     # filter again
-    filtered2 = filtered.filter_trace(_filter2)
+    filtered2 = filtered.filter(filter_2)
     assert filtered2.size() == 2
-    filtered2.scan_trace(scanner)
+    filtered2.scan(scanner)
 
     # invert view
     inverted = filtered2.inverted_view()
     assert inverted.size() == 3
-    inverted.scan_trace(scanner)
+    inverted.scan(scanner)
 
 def test_scan(tracefile, pcs, instrs):
 
     trace = pct.trace.open(tracefile)
     assert trace is not None, "Failed to open tracefile %s" % tracefile
         
-    class py_scanner_simple(pct.Scanner):
-
-        def __init__(self):
-            pct.Scanner.__init__(self)
-            self.count = 0
-        
-        def run(self, e, idx):
-            assert idx == self.count
-            self.count += 1
+    context = {
+        "count": 0,
+        "regs_tested": False
+    }
+    
+    def scanner_simple(e, idx):
+            assert idx == context["count"]
+            context["count"] += 1
             return False
-        
-    class py_scanner_stop(pct.Scanner):
-        
-        def __init__(self):
-            pct.Scanner.__init__(self)
-            self.count = 0
             
-        def run(self, e, idx):
-            assert idx == self.count
-            self.count += 1
-            return self.count == 2
+    def scanner_stop(e, idx):
+            assert idx == context["count"]
+            context["count"] += 1
+            return context["count"] == 2
 
-    class py_scanner_entry(pct.Scanner):
-        def run(self, e, idx):
+    def scanner_entry(e, idx):
             assert e.pc == pcs[idx]
             assert e.inst == instrs[idx]
             return False
-
-    class py_scanner_detail(pct.DetailedScanner):
-        def __init__(self):
-            pct.DetailedScanner.__init__(self)
-            self.regs_tested = False
             
-        def run(self, e, r, idx):
+    def scanner_detail(e, r, idx):
             assert e.pc == pcs[idx]
             assert e.inst == instrs[idx]
             if (idx == 4):
@@ -192,22 +169,22 @@ def test_scan(tracefile, pcs, instrs):
                     reg -= 1
                     assert r.gpr[reg] == val
                     assert r.valid_gprs[reg]
-                self.regs_tested = True
+                context["regs_tested"] = True
                 expect_regval(19, 0x7fffffe1a0);
                 expect_regval(18, 0x9800000002b3e000);
                 expect_regval(17, 0xc0000000150b7780);
                 expect_regval(16, 0xc0000000150b7530);
             return False
 
-    scan_simple = py_scanner_simple().__disown__()
-    scan_stop = py_scanner_stop().__disown__()
-    scan_entry = py_scanner_entry().__disown__()
-    scan_detail = py_scanner_detail().__disown__()
-
-    trace.scan_trace(scan_simple)
-    assert scan_simple.count == 5
-    trace.scan_trace(scan_stop)
-    assert scan_stop.count == 2
-    trace.scan_trace(scan_entry)
-    trace.scan_trace(scan_detail, 0, trace.size())
+    trace.scan(scanner_simple)
+    assert context["count"] == 5
+    context["count"] = 0
+    
+    trace.scan(scanner_stop)
+    assert context["count"] == 2
+    context["count"] = 0
+    
+    trace.scan(scanner_entry)
+    trace.scan(scanner_detail, 0, trace.size())
+    assert context["regs_tested"]
     

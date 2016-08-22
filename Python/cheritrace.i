@@ -1,24 +1,33 @@
 // swig interface definition for the cheritrace library
 
-%module(directors="1") pycheritrace
+%module pycheritrace
 
 %include "std_string.i";
 %include "std_array.i"
 %include "std_shared_ptr.i"
 %include "stdint.i"
+%include "exception.i"
 
 %include "std_bitset.i"
 
 %{
 #define SWIG_FILE_WITH_INIT
 #include "../disassembler.hh"
-#include "callback.hh"
+#include "../streamtrace.hh"
 #include <functional>
 %}
 
 // unsupported by SWIG
 #define __attribute__(x)
 #define static_assert(x,y)
+
+/* XXX Ignore trace::(string, notifier) as the notifier callback need
+ *  some more work.
+ * The notifier is saved in the thread, we must Py_INCREF the object!
+ * may need to acquire the GIL from the loading thread
+ */
+%ignore cheri::streamtrace::trace::open;
+%rename("%s") cheri::streamtrace::trace::open(const std::string&);
 
 // wrap STL types
 %shared_ptr(cheri::streamtrace::trace)
@@ -27,54 +36,215 @@
 %template (CapArray) std::array<struct cheri::streamtrace::capability_register, 32>;
 %template (GprBitset) std::bitset<31>;
 %template (CapBitset) std::bitset<32>;
+/* Workaround missing support of nested unions (see accessors below) */
+%ignore cheri::streamtrace::debug_trace_entry::reg_value;
 
-// SWIG does not yet support std::function
-// scanner and filter callbacks are handled via custom director classes
-%ignore cheri::streamtrace::Scanner::c_scanner;
-%ignore cheri::streamtrace::DetailedScanner::c_scanner;
-%ignore cheri::streamtrace::Filter::c_scanner;
-%ignore cheri::streamtrace::trace::scan;
+/* 
+ * Convert from python function to C function pointer for trace::scanner
+ * trace::detailed_scanner, trace::filter and trace::notifier
+ */
+%typemap (in)
+cheri::streamtrace::trace::scanner
+{
+     if (!PyCallable_Check($input)) {
+	  SWIG_exception(SWIG_TypeError, "Object not callable");
+     }
+     $1 = [$input](cheri::streamtrace::debug_trace_entry entry, uint64_t idx) {
+	  PyObject *trace_entry;
+	  PyObject *args;
+	  PyObject *result;
+	  int c_result;
+	  /*
+	   * Third argument (flags) prevent swig from trying to free()
+	   * the entry pointer
+	   */
+	  trace_entry = SWIG_NewPointerObj(SWIG_as_voidptr(&entry),
+					   SWIGTYPE_p_cheri__streamtrace__debug_trace_entry,
+					   0);
+	  args = Py_BuildValue("(OK)", trace_entry, idx);
+	  result = PyObject_Call($input, args, NULL);
+	  if (!result)
+	  {
+	       /* stop scanning if there is an exception */
+	       c_result = 1;
+	  }
+	  else
+	  {
+	       /* do not strictly check for a PyBool,
+		* it is more pythonic to accept anything
+		*/
+	       c_result = PyObject_IsTrue(result);
+	       Py_DECREF(result);
+	  }
+	  Py_DECREF(args);
+	  Py_DECREF(trace_entry);
+	  return (bool)c_result;
+     };
+}
 
-%feature("director") cheri::streamtrace::Scanner;
-%feature("director") cheri::streamtrace::DetailedScanner;
-%feature("director") cheri::streamtrace::Filter;
+%typemap (in) cheri::streamtrace::trace::filter_predicate
+{
+     if (!PyCallable_Check($input)) {
+	  SWIG_exception(SWIG_TypeError, "Object not callable");
+     }
+     $1 = [$input](const cheri::streamtrace::debug_trace_entry &entry)
+	  {
+	       PyObject *trace_entry;
+	       PyObject *args;
+	       PyObject *result;
+	       int c_result = 0;
+	    
+	       /* 
+		* Third argument (flags) prevent swig from trying to free() 
+		* the entry pointer 
+		*/
+	       trace_entry = SWIG_NewPointerObj(
+		    SWIG_as_voidptr(&entry),
+		    SWIGTYPE_p_cheri__streamtrace__debug_trace_entry,
+		    0);
+	       args = Py_BuildValue("(O)", trace_entry);
+	       result = PyObject_Call($input, args, NULL);
+	       if (!result)
+	       {
+		    c_result = 1;
+	       }
+	       else
+	       {
+		    /* do not strictly check for a PyBool, 
+		     * it is more pythonic to accept anything 
+		     */
+		    c_result = PyObject_IsTrue(result);
+		    Py_DECREF(result);
+	       }
+	       Py_DECREF(args);
+	       Py_DECREF(trace_entry);
+	       return (bool)c_result;
+	  };
+}
 
-//%nodefaultctor cheri::streamtrace::Scanner;
+%typemap (in) cheri::streamtrace::trace::detailed_scanner
+{
+    if (!PyCallable_Check($input))
+	SWIG_exception(SWIG_TypeError, "Object not callable");
+    
+    $1 = [$input](const cheri::streamtrace::debug_trace_entry &entry,
+		  const cheri::streamtrace::register_set &regset,
+		  uint64_t idx)
+	{
+	    PyObject *trace_entry;
+	    PyObject *register_set;
+	    PyObject *args;
+	    PyObject *result;
+	    int c_result;
+	    
+	    /* 
+	     * Third argument (flags) prevent swig from trying to free() 
+	     * the entry pointer 
+	     */
+	    trace_entry = SWIG_NewPointerObj(SWIG_as_voidptr(&entry),
+					     SWIGTYPE_p_cheri__streamtrace__debug_trace_entry,
+					     0);
+	    register_set = SWIG_NewPointerObj(SWIG_as_voidptr(&regset),
+					      SWIGTYPE_p_cheri__streamtrace__register_set,
+					      0);
+	    args = Py_BuildValue("(OOK)", trace_entry, register_set, idx);
+	    result = PyObject_Call($input, args, NULL);
+	    if (!result)
+	    {
+		 c_result = 1;
+	    }
+	    else
+	    {
+		 /* do not strictly check for a PyBool, 
+		  * it is more pythonic to accept anything 
+		  */
+		 c_result = PyObject_IsTrue(result);      
+		 Py_DECREF(result);
+	    }
+	    Py_DECREF(args);
+	    Py_DECREF(register_set);
+	    Py_DECREF(trace_entry);
+	    return (bool)c_result;
+	};
+}
+
+%fragment("PyCheritrace_GetArgcount", "header")
+{
+     int PyCheritrace_GetArgcount(PyObject *callable)
+     {
+	  PyObject *code, *argcount, *run, *func;
+	  int c_argcount = 0;
+	  
+	  if (PyCallable_Check(callable))
+	  {
+	       code = PyObject_GetAttrString(callable, "__code__");
+	       if (!code) {
+		    PyErr_Clear();
+		    /* may be a callable class */
+		    run = PyObject_GetAttrString(callable, "__call__");
+		    if (!run)
+			 return 0;
+		    func = PyObject_GetAttrString(run, "__func__");
+		    Py_DECREF(run);
+		    if (!func)
+			 return 0;
+		    code = PyObject_GetAttrString(func, "__code__");
+		    Py_DECREF(func);
+		    if (!code)
+			 return 0;
+		    c_argcount = -1; /* account for self */
+	       }
+	       argcount = PyObject_GetAttrString(code, "co_argcount");
+	       if (!argcount)
+	       {
+		    Py_DECREF(code);
+		    return 0;
+	       }
+	       c_argcount += PyInt_AsLong(argcount);
+	       Py_DECREF(argcount);
+	       return c_argcount;
+	  }
+	  return 0;
+     }
+}
+
+%typemap(typecheck,
+	 precedence=SWIG_TYPECHECK_INTEGER,
+	 fragment="PyCheritrace_GetArgcount")
+cheri::streamtrace::trace::scanner
+{
+     $1 = PyCheritrace_GetArgcount($input) == 2;
+}
+
+%typemap(typecheck,
+	 precedence=SWIG_TYPECHECK_INTEGER,
+	 fragment="PyCheritrace_GetArgcount")
+cheri::streamtrace::trace::detailed_scanner
+{
+     $1 = PyCheritrace_GetArgcount($input) == 3;
+}
+
+%typemap(typecheck,
+	 precedence=SWIG_TYPECHECK_INTEGER,
+	 fragment="PyCheritrace_GetArgcount")
+cheri::streamtrace::trace::filter_predicate
+{
+     $1 = PyCheritrace_GetArgcount($input) == 1;
+}
+
 %include "../streamtrace.hh";
 %include "../disassembler.hh";
-%include "callback.hh"
 
-%extend cheri::streamtrace::trace {
+%extend cheri::streamtrace::debug_trace_entry
+{
+     /* Workaround missing support of nested unions */
+     cheri::streamtrace::capability_register& reg_value_cap()
+     {
+	  return $self->reg_value.cap;
+     }
 
-    void scan_trace(cheri::streamtrace::Scanner* scn) {
-      auto bound_cbk = std::bind(&cheri::streamtrace::Scanner::c_scanner,
-				 scn,
-				 std::placeholders::_1,
-				 std::placeholders::_2);
-      $self->scan(cheri::streamtrace::trace::scanner(bound_cbk));
-    }
-
-    void scan_trace(cheri::streamtrace::Scanner* scn, uint64_t start, uint64_t end, int opts=0) {
-      auto bound_cbk = std::bind(&cheri::streamtrace::Scanner::c_scanner,
-				 scn,
-				 std::placeholders::_1,
-				 std::placeholders::_2);
-      $self->scan(cheri::streamtrace::trace::scanner(bound_cbk), start, end, opts);
-    }
-
-    void scan_trace(cheri::streamtrace::DetailedScanner* scn, uint64_t start, uint64_t end, int opts=0) {
-      auto bound_cbk = std::bind(&cheri::streamtrace::DetailedScanner::c_scanner,
-				 scn,
-				 std::placeholders::_1,
-				 std::placeholders::_2,
-				 std::placeholders::_3);
-      $self->scan(cheri::streamtrace::trace::detailed_scanner(bound_cbk), start, end, opts);
-    }
-
-    std::shared_ptr<trace_view> filter_trace(cheri::streamtrace::Filter* filter) {
-      auto bound_cbk = std::bind(&cheri::streamtrace::Filter::c_filter,
-				 filter,
-				 std::placeholders::_1);
-      return $self->filter(cheri::streamtrace::trace::filter_predicate(bound_cbk));
-    }
+     uint64_t reg_value_gp()
+     {
+	  return $self->reg_value.gp;
+     }
 }

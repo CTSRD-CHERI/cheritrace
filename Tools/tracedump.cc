@@ -216,13 +216,13 @@ inline void print_register(const debug_trace_entry &e)
 	}
 }
 
-#ifdef SIGINFO
-sig_atomic_t sig_info = 0;
-void sig_info_handler(int info)
+
+static sig_atomic_t sig_info = 0;
+static void sig_info_handler(int info)
 {
 	sig_info = 1;
 }
-#endif
+
 } // Anonymous namespace
 
 int main(int argc, char **argv)
@@ -316,7 +316,6 @@ int main(int argc, char **argv)
 					putchar('\n');
 				}
 			}
-#ifdef SIGINFO
 			if (sig_info)
 			{
 				sig_info = 0;
@@ -326,7 +325,6 @@ int main(int argc, char **argv)
 						(double)i/total*100, i, total);
 
 			}
-#endif
 			return false;
 		};
 	trace->scan(detail, first, last);

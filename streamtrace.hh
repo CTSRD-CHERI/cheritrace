@@ -45,9 +45,6 @@ namespace disassembler
 }
 namespace streamtrace
 {
-#ifndef SIZE_T_MAX
-#define SIZE_T_MAX SIZE_MAX
-#endif
 /**
  * Format for on-disk trace entries.  These are all stored in CHERI native
  * endian (big endian).

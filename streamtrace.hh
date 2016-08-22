@@ -351,6 +351,22 @@ struct debug_trace_entry
 		return -1;
 	}
 	/**
+	 * Retrun the value of the register related to this instruction as
+	 * a capability register.
+	 */
+	const capability_register& reg_value_cap() const
+	{
+		return reg_value.cap;
+	}
+	/**
+	 * Return the value of the register related to this instruction as
+	 * a general purpose register.
+	 */
+	uint64_t reg_value_gp() const
+	{
+		return reg_value.gp;
+	}
+	/**
 	 * Returns true if the program counter is in the range reserved for the
 	 * kernel.
 	 */

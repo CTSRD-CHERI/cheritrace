@@ -234,17 +234,3 @@ cheri::streamtrace::trace::filter_predicate
 
 %include "../streamtrace.hh";
 %include "../disassembler.hh";
-
-%extend cheri::streamtrace::debug_trace_entry
-{
-     /* Workaround missing support of nested unions */
-     cheri::streamtrace::capability_register& reg_value_cap()
-     {
-	  return $self->reg_value.cap;
-     }
-
-     uint64_t reg_value_gp()
-     {
-	  return $self->reg_value.gp;
-     }
-}

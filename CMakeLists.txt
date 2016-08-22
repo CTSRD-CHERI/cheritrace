@@ -77,7 +77,11 @@ if (TESTS)
 endif ()
 
 add_subdirectory(Tools)
-add_subdirectory(Python)
+
+option(PYTHON_BINDINGS "Build python bindings" ON)
+if (PYTHON_BINDINGS)
+  add_subdirectory(Python)
+endif ()
 
 if (NOT CMAKE_INSTALL_LIBDIR)
 	set(CMAKE_INSTALL_LIBDIR lib)

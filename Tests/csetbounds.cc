@@ -19,6 +19,10 @@ struct reg_info {
 };
 
 static struct reg_info registers[] = {
+  /*
+   * XXXAM: rerun the test program with the fixed qemu to generate a trace
+   * with the correct valid and sealed bits.
+   */
      {14, 1, {0x00, 0x10000000000, 0x12007b900, 0x01000000, 0x00, 0, 0}},
      {15, 3, {0x12007b900, 0x03, 0x00, 0x01000000, 0x00, 0, 0}},
      {26, 3, {0x12007b900, 0x03, 0x00, 0x80000000, 0x0000807d, 1, 0}},

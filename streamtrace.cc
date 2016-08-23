@@ -1682,6 +1682,13 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val3,
 		uint64_t val4, uint64_t val5)
 {
 	cap.valid = extract_bits<63>(val2);
+	/*
+	 * XXXAM: the meaning of this is not clear
+	 * why are we interpreting bit 0 as unsealed instead of sealed?
+	 *
+	 * Qemu stores is_cap_sealed(cap) ? 1 : 0 (capability sealed flag).
+	 * The bluespec implementation stores the capability sealed flag.
+	 */
 	cap.unsealed = extract_bits<0>(val2);
 	cap.permissions = extract_bits<31,1>(val2);
 	cap.type = extract_bits<55,32>(val2);

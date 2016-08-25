@@ -23,8 +23,8 @@ static struct reg_info registers[] = {
    * XXXAM: rerun the test program with the fixed qemu to generate a trace
    * with the correct valid and sealed bits.
    */
-     {14, 1, {0x00, 0x10000000000, 0x12007b900, 0x01000000, 0x00, 0, 0}},
-     {15, 3, {0x12007b900, 0x03, 0x00, 0x01000000, 0x00, 0, 0}},
+     {14, 1, {0x00, 0x10000000000, 0x12007b900, 0x80000000, 0x0000807d, 1, 0}},
+     {15, 3, {0x12007b900, 0x03, 0x00, 0x80000000, 0x0000807d, 1, 0}},
      {26, 3, {0x12007b900, 0x03, 0x00, 0x80000000, 0x0000807d, 1, 0}},
      {26, 3, {0x12007b900, 0x03, 0x00, 0x80000000, 0x0000807d, 1, 0}},
      {29, 3, {0x12007b900, 0x03, 0x00, 0x80000000, 0x0000807d, 1, 0}},
@@ -35,7 +35,7 @@ static struct reg_info registers[] = {
 bool
 assert_cap_equal(capability_register &reg, capability_register &expect)
 {
-     printf("%lx %lx\n", reg.base, expect.base);
+     printf("%lx %lx\n", reg.permissions, expect.permissions);
      assert(reg.base == expect.base);
      assert(reg.offset == expect.offset);
      assert(reg.length == expect.length);

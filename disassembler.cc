@@ -77,7 +77,7 @@ int registerIndexForString(const char *str)
 		}
 		return idx + 64;
 	}
-	if (str[0] == 'f')
+	if (str[0] == 'f' && str[1] != 'p')
 	{
 		str++;
 		long idx = strtol(str, &end, 10);

@@ -216,8 +216,9 @@ inline void print_register(const debug_trace_entry &e)
 	}
 }
 
-sig_atomic_t sig_info = 0;
-void sig_info_handler(int info)
+
+static sig_atomic_t sig_info = 0;
+static void sig_info_handler(int info)
 {
 	sig_info = 1;
 }

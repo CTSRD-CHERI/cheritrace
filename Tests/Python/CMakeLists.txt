@@ -1,0 +1,14 @@
+
+if (PYTHON_BINDINGS)
+  find_package(PythonInterp REQUIRED)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/simple.py ${CMAKE_CURRENT_BINARY_DIR}/simple.py COPYONLY)
+  add_test(NAME py_binding_test COMMAND ${PYTHON_EXECUTABLE} -m pytest ${CMAKE_CURRENT_BINARY_DIR}/simple.py)
+  set_property(TEST py_binding_test PROPERTY ENVIRONMENT
+    "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
+    "DYLD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
+    "CTEST_SOURCE_PATH=${CMAKE_SOURCE_DIR}/Tests"
+    "PYTHONPATH=${PYTHONPATH}:${PROJECT_BINARY_DIR}/Python")
+endif (PYTHON_BINDINGS)
+
+

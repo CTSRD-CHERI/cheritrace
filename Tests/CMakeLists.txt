@@ -12,7 +12,9 @@ set(TESTS
 	shared_object.cc
 	simple.cc
 	simple_v2.cc
-	disassemble_v2.cc)
+	disassemble_v2.cc
+	csetbounds.cc
+	regset_update.cc)
 
 foreach(TEST_SOURCE ${TESTS})
 	get_filename_component(TEST ${TEST_SOURCE} NAME_WE)
@@ -28,4 +30,4 @@ foreach(TEST_SOURCE ${TESTS})
 	target_link_libraries(${TEST} cheritrace)
 endforeach()
 
-
+add_subdirectory(Python)

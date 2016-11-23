@@ -32,11 +32,59 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 
 #pragma once
 
 namespace cheri {
 namespace disassembler  {
+
+/**
+ * Information about an instruction operand
+ */
+struct operand_info {
+	/**
+	 * Is the operand valid?
+	 */
+	bool is_valid;
+	/**
+	 * Is the operand a register?
+	 */
+	bool is_register;
+	/**
+	 * Is the operand an immediate?
+	 */
+	bool is_immediate;
+	/**
+	 * Is floating point immediate?
+	 */
+	bool is_fp_immediate;
+	/**
+	 * Is expression? (MCExpr*)
+	 * XXX what is this exactly
+	 */
+	bool is_expr;
+	/**
+	 * Is inst? (MCInst*)
+	 * XXX what is this exactly
+	 */
+	bool is_inst;
+	/**
+	 * Operand register number, this is valid only
+	 * if the operand is a register.
+	 */
+	int register_number;
+	/**
+	 * Operand immediate value, this is valid only
+	 * if the operand is an immediate.
+	 */
+	int64_t immediate;
+	/**
+	 * Operand floating point immediate value, this
+	 * is valid only if the operand is a float immediate.
+	 */
+	double fp_immediate;
+};
 
 /**
  * Information about an instruction.
@@ -76,6 +124,10 @@ struct instruction_info {
 	 * from 64-95.
 	 */
 	int destination_register = -1;
+	/**
+	 * Operands of the instruction
+	 */
+	std::vector<operand_info> operands;
 };
 
 /**
@@ -110,7 +162,6 @@ static const char* const MipsRegisterNames[] = {
 };
 
 struct disassembler_impl;
-
 /**
  * Public interface to the disassembler.  Note that this is not safe to use
  * across threads.
@@ -134,5 +185,5 @@ public:
 
 
 
-} //namespace disassembler 
+} //namespace disassembler
 }// namespace cheri

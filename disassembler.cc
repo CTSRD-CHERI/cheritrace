@@ -47,7 +47,7 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler.h"
 #include "llvm/MC/MCInstPrinter.h"
-
+#include "llvm/MC/MCExpr.h"
 
 #include <mutex>
 #include <assert.h>
@@ -277,6 +277,32 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 		{
 			info.destination_register = regNo;
 		}
+	}
+
+	/* Extract operands of the instruction */
+	for (unsigned i=0; i<inst.getNumOperands(); i++)
+	{
+		operand_info op_info;
+		llvm::MCOperand op = inst.getOperand(i);
+		op_info.is_valid = op.isValid();
+		op_info.is_register = op.isReg();
+		op_info.is_immediate = op.isImm();
+		op_info.is_fp_immediate = op.isFPImm();
+		op_info.is_expr = op.isExpr();
+		op_info.is_inst = op.isInst();
+		if (op.isReg())
+		{
+			op_info.register_number = pimpl->registerIndexForLLVMRegNo(op.getReg());
+		}
+		else if (op.isImm())
+		{
+			op_info.immediate = op.getImm();
+		}
+		else if (op.isFPImm())
+		{
+			op_info.fp_immediate = op.getFPImm();
+		}
+		info.operands.push_back(op_info);
 	}
 	return info;
 }

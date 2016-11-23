@@ -47,7 +47,6 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/mman.h>
-#include <limits>
 
 #define expect(x, y)      __builtin_expect(!!(x), y)
 

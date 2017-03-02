@@ -68,5 +68,42 @@ int main()
 				return false;
 			}, 0, 4, 0);
 	assert(regs_tested);
+	/* try scanning backwards with different scanners and ranges */
+	count = 0;
+	trace->scan([&](debug_trace_entry e, uint64_t idx) {
+		count++;
+		assert(e.pc == pcs[idx]);
+		assert(e.inst == instrs[idx]);
+		return false;
+	    }, 0, 4, cheri::streamtrace::trace::backwards);
+	assert(count == 5);
+
+	count = 0;
+	trace->scan([&](const debug_trace_entry &e, const register_set &regs, uint64_t idx) {
+		count++;
+		assert(e.pc == pcs[idx]);
+		assert(e.inst == instrs[idx]);
+		return false;
+	    }, 0, 4, cheri::streamtrace::trace::backwards);
+	assert(count == 5);
+
+	count = 0;
+	trace->scan([&](debug_trace_entry e, uint64_t idx) {
+		count++;
+		assert(e.pc == pcs[idx]);
+		assert(e.inst == instrs[idx]);
+		return false;
+	    }, 2, 4, cheri::streamtrace::trace::backwards);
+	assert(count == 3);
+
+	count = 0;
+	trace->scan([&](const debug_trace_entry &e, const register_set &regs, uint64_t idx) {
+		count++;
+		assert(e.pc == pcs[idx]);
+		assert(e.inst == instrs[idx]);
+		return false;
+	    }, 2, 4, cheri::streamtrace::trace::backwards);
+	assert(count == 3);
+
 	return 0;
 }

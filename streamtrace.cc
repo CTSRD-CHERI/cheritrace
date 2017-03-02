@@ -741,7 +741,7 @@ class concrete_streamtrace : public trace,
 		}
 		uint64_t segstart = -1;
 		std::unique_ptr<trace_segment> segment;
-		for (; start<scan_end ; start+=inc)
+		for (; start!=scan_end ; start+=inc)
 		{
 			if (segstart != (start / keyframe_interval))
 			{
@@ -858,7 +858,7 @@ class concrete_traceview : public trace_view
 		}
 		uint64_t segstart = -1;
 		std::unique_ptr<trace_segment> segment;
-		for (; start<scan_end ; start+=inc)
+		for (; start!=scan_end ; start+=inc)
 		{
 			auto i = indexes[start];
 			if (segstart != (i / keyframe_interval))

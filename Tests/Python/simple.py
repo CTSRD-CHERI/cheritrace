@@ -86,14 +86,52 @@ def test_scan_simple(tracefile, pcs, instrs):
 
     trace = pct.trace.open(tracefile)
     assert trace is not None, "Failed to open tracefile %s" % tracefile
+    state = {"n_call": 0}
 
     def scanner(e, idx):
+        state["n_call"] += 1
         assert e.pc == pcs[idx]
         assert e.inst == instrs[idx]
         return False
 
     trace.scan(scanner)
+    assert state["n_call"] == 5
     trace.scan(scanner, 0, 42, pct.trace.backwards)
+    assert state["n_call"] == 10
+
+def test_scan_backwards(tracefile, pcs, instrs):
+
+    trace = pct.trace.open(tracefile)
+    assert trace is not None, "Failed to open tracefile %s" % tracefile
+    state = {"n_call": 0, "idx": 5}
+
+    def scanner(e, idx):
+        state["n_call"] += 1
+        assert state["idx"] > idx
+        state["idx"] = idx
+        assert e.pc == pcs[idx]
+        assert e.inst == instrs[idx]
+        return False
+
+    trace.scan(scanner, 2, 4, pct.trace.backwards)
+    assert state["n_call"] == 3
+
+def test_detail_scan_backwards(tracefile, pcs, instrs):
+
+    trace = pct.trace.open(tracefile)
+    assert trace is not None, "Failed to open tracefile %s" % tracefile
+    state = {"n_call": 0, "idx": 5}
+
+    def scanner(e, regs, idx):
+        state["n_call"] += 1
+        assert state["idx"] > idx
+        state["idx"] = idx
+        assert e.pc == pcs[idx]
+        assert e.inst == instrs[idx]
+        return False
+
+    trace.scan(scanner, 2, 4, pct.trace.backwards)
+    assert state["n_call"] == 3
     
 def test_filter(tracefile, pcs, instrs):
 

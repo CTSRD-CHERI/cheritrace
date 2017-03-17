@@ -41,14 +41,14 @@
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
-#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#include "llvm/MC/MCDisassembler/MCRelocationInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCRelocationInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 
 
@@ -58,7 +58,7 @@ using namespace __cxxabiv1;
 using namespace cheri;
 using namespace objectfile;
 using llvm::object::symbol_iterator;
-using llvm::ErrorOr;
+using llvm::Expected;
 using llvm::StringRef;
 
 namespace llvm {
@@ -219,7 +219,7 @@ namespace {
 template<typename T, typename S>
 bool isInRange(S &secOrSym, T &start, T size, T address)
 {
-	ErrorOr<T> Start = secOrSym.getAddress();
+	Expected<T> Start = secOrSym.getAddress();
 	if (!Start)
 	{
 		return false;
@@ -247,9 +247,13 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 		{
 			continue;
 		}
-		ErrorOr<StringRef> name = sym.getName();
+		Expected<StringRef> name = sym.getName();
+		if (!name)
+		{
+			continue;
+		}
 		section_iterator iter((SectionRef()));
-		ErrorOr<section_iterator> section = sym.getSection();
+		Expected<section_iterator> section = sym.getSection();
 		if (!section)
 		{
 			continue;

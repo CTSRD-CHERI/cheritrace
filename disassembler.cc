@@ -32,10 +32,13 @@
 
 #include "cheri.hh"
 #include "disassembler.hh"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -48,6 +51,12 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCTargetOptions.h"
+#include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCCodeEmitter.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCTargetAsmParser.h"
 
 #include <mutex>
 #include <assert.h>
@@ -101,12 +110,15 @@ int registerIndexForString(const char *str)
 	}
 	return -1;
 }
-std::unique_ptr<const llvm::MCSubtargetInfo> sti;
 } // Anonymous namespace
 
 namespace cheri {
 namespace disassembler{
-struct disassembler_impl 
+
+static std::unique_ptr<const llvm::MCRegisterInfo> mri;
+static std::unique_ptr<llvm::MCSubtargetInfo> sti;
+
+struct disassembler_impl
 {
 	/**
 	 * LLVM machine code context.
@@ -137,8 +149,6 @@ int disassembler_impl::registerIndexForLLVMRegNo(unsigned regNo)
 	return registerIndexForString(regStream.str().c_str());
 }
 
-static std::unique_ptr<const llvm::MCRegisterInfo> mri;
-
 disassembler::disassembler()
 {
 	pimpl = new disassembler_impl();
@@ -150,11 +160,11 @@ disassembler::~disassembler()
 }
 disassembler_impl::disassembler_impl()
 {
+	static std::once_flag flag;
 	static const llvm::Target *target;
 	static std::unique_ptr<const llvm::MCAsmInfo> asmInfo;
 	static std::unique_ptr<const llvm::MCInstrInfo> mii;
 	static std::unique_ptr<const llvm::MCInstrAnalysis> mia;
-	static std::once_flag flag;
 	static llvm::Triple targetTriple;
 
 	LLVMInitializeMipsTargetInfo();
@@ -162,8 +172,7 @@ disassembler_impl::disassembler_impl()
 	LLVMInitializeMipsAsmParser();
 	LLVMInitializeMipsDisassembler();
 
-
-	std::call_once(flag, [](){ 
+	std::call_once(flag, [this](){
 		std::string cheriTriple("cheri-unknown-freebsd");
 		std::string mipsTriple("mips64-unknown-freebsd");
 		std::string triple = cheriTriple;
@@ -307,8 +316,138 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 	return info;
 }
 
-/*
-struct instruction_info {
-	int destination_register;
+namespace cheri {
+namespace disassembler{
+
+struct assembler_impl
+{
+	const std::string cheriTriple;
+	const llvm::Triple targetTriple;
+	const llvm::Target *target;
+	std::unique_ptr<llvm::MCRegisterInfo> MRI;
+	std::unique_ptr<llvm::MCAsmInfo> MAI;
+	std::unique_ptr<llvm::MCInstrInfo> MCII;
+	std::unique_ptr<llvm::MCSubtargetInfo> STI;
+	llvm::MCObjectFileInfo MOFI;
+	llvm::MCTargetOptions MCOptions;
+	assembler_impl();
 };
-*/
+
+class MCInstEncodingStreamer final : public llvm::MCStreamer
+{
+	llvm::raw_ostream &OS;
+	std::unique_ptr<llvm::MCCodeEmitter> Emitter;
+public:
+	MCInstEncodingStreamer(llvm::MCContext &Context, llvm::raw_ostream &os, llvm::MCCodeEmitter *emitter)
+		: MCStreamer(Context), OS(os), Emitter(emitter)
+	{
+		assert(Emitter);
+	}
+
+	void EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI) override;
+	void EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
+			  uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+	bool EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override;
+	void EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment) override;
+};
+}
+}
+
+void MCInstEncodingStreamer::EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol,
+					  uint64_t Size, unsigned ByteAlignment)
+{
+	assert(false && "Not implemented");
+}
+
+bool MCInstEncodingStreamer::EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute)
+{
+	assert(false && "Not implemented");
+}
+void MCInstEncodingStreamer::EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment)
+{
+	assert(false && "Not implemented");
+}
+
+void MCInstEncodingStreamer::EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI)
+{
+	llvm::SmallVector<llvm::MCFixup, 4> Fixups;
+	Emitter->encodeInstruction(Inst, OS, Fixups, STI);
+	assert(Fixups.size() == 0 && "Instruction requires fixups");
+}
+
+assembler::assembler()
+{
+	pimpl.reset(new assembler_impl);
+}
+
+assembler::~assembler() = default;
+
+assembler_impl::assembler_impl()
+	: cheriTriple("cheri-unknown-freebsd"), targetTriple(llvm::Triple(cheriTriple))
+{
+	std::string MCPU("");
+	std::string FeatureStr("");
+	LLVMInitializeMipsTargetInfo();
+	LLVMInitializeMipsTargetMC();
+	LLVMInitializeMipsAsmParser();
+	LLVMInitializeMipsDisassembler();
+	/* require the cheri target */
+	std::string Error;
+	target = llvm::TargetRegistry::lookupTarget(cheriTriple, Error);
+	assert(target);
+	/* make machine register info mri */
+	MRI.reset(target->createMCRegInfo(cheriTriple));
+	assert(MRI && "Unable to create target register info");
+	/* make asm info asmInfo */
+	MAI.reset(target->createMCAsmInfo(*MRI, cheriTriple));
+	assert(MAI && "Failed to create MCAsmInfo");
+	/* create mc instr info mcii */
+	MCII.reset(target->createMCInstrInfo());
+	assert(MCII && "Failed to create MCInstrInfo");
+	/* create mc subtarget info sti */
+	STI.reset(target->createMCSubtargetInfo(cheriTriple, MCPU, FeatureStr));
+	assert(STI && "Failed to create MCSubtargetInfo");
+}
+
+uint32_t assembler::assemble(const std::string &asmexpr)
+{
+	auto& MRI = pimpl->MRI;
+	auto& MAI = pimpl->MAI;
+	auto& MOFI = pimpl->MOFI;
+	auto& MCII = pimpl->MCII;
+	auto& STI = pimpl->STI;
+	auto& MCOptions = pimpl->MCOptions;
+	auto& targetTriple = pimpl->targetTriple;
+	auto target = pimpl->target;
+	llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> BufferPtr =
+		llvm::MemoryBuffer::getMemBuffer(asmexpr);
+	assert(!BufferPtr.getError() && "Can not create input buffer");
+
+	llvm::SourceMgr SrcMgr;
+	SrcMgr.AddNewSourceBuffer(std::move(*BufferPtr), llvm::SMLoc());
+
+	/* make context */
+	llvm::MCContext Ctx(MAI.get(), MRI.get(), &MOFI, &SrcMgr);
+	assert(Ctx.getRegisterInfo() && "Register info is NULL");
+	MOFI.InitMCObjectFileInfo(targetTriple, /*PIC*/ false, llvm::CodeModel::Model::Default, Ctx);
+
+	llvm::SmallString<256> instrBuffer;
+	llvm::raw_svector_ostream OS(instrBuffer);
+	llvm::MCCodeEmitter *CE = target->createMCCodeEmitter(*MCII, *MRI, Ctx);
+
+	std::unique_ptr<MCInstEncodingStreamer> Str(new MCInstEncodingStreamer(Ctx, OS, CE));
+	/* ownership of the target streamer is taken by the MCInstEncodingStreamer */
+	target->createNullTargetStreamer(*Str);
+
+	std::unique_ptr<llvm::MCAsmParser> Parser(llvm::createMCAsmParser(SrcMgr, Ctx, *Str, *MAI));
+	std::unique_ptr<llvm::MCTargetAsmParser> TAP(target->createMCAsmParser(*STI, *Parser, *MCII, MCOptions));
+	assert(TAP && "Failed to create MCTargetAsmParser");
+	Parser->setTargetParser(*TAP);
+
+	int Res = Parser->Run(/*NoInitialTextSection*/ false);
+	assert(Res == 0 && "Failed to run MCAsmParser");
+	uint32_t opcode;
+	memcpy((void *)&opcode, instrBuffer.data(), sizeof(opcode));
+	opcode = llvm::support::endian::byte_swap<uint32_t, llvm::support::big>(opcode);
+	return opcode;
+}

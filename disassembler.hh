@@ -183,7 +183,15 @@ public:
 	instruction_info disassemble(uint32_t);
 };
 
+struct assembler_impl;
 
+class assembler {
+	std::unique_ptr<assembler_impl> pimpl;
+public:
+	assembler();
+	~assembler();
+	uint32_t assemble(const std::string &asmexpr);
+};
 
 } //namespace disassembler
 }// namespace cheri

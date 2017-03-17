@@ -385,6 +385,10 @@ struct debug_trace_entry
 	 * Constructs an in-memory trace entry from the v1 on-disk format.
 	 */
 	debug_trace_entry(const debug_trace_entry_disk_v1 &d, disassembler::disassembler &dis);
+	/**
+	 * Constructs an in-memory trace entry from an asm expression
+	 */
+	debug_trace_entry(const std::string &expr, disassembler::disassembler &dis);
 };
 
 /**
@@ -543,6 +547,16 @@ struct trace_view : public trace
 	 * in this trace.
 	 */
 	virtual std::shared_ptr<trace_view> inverted_view() = 0;
+};
+/**
+ * Abstract interface to modify trace files
+ */
+struct trace_writer
+{
+	/**
+	 * Append instruction to the end of the trace file
+	 */
+	virtual bool append(const debug_trace_entry &entry) = 0;
 };
 }
 } // namespace cheri

@@ -36,6 +36,7 @@
 #include <array>
 #include <bitset>
 #include <functional>
+#include <fstream>
 
 namespace cheri
 {
@@ -364,6 +365,22 @@ struct debug_trace_entry
 		return reg_value.gp;
 	}
 	/**
+	 * Set the value of the register updated by the instruction as
+	 * a capability register
+	 */
+	void reg_value_set(const capability_register &cap)
+	{
+		reg_value.cap = cap;
+	}
+	/**
+	 * Set the value of the register updated by the instruction as
+	 * a general-purpose register
+	 */
+	void reg_value_set(uint64_t gp)
+	{
+		reg_value.gp = gp;
+	}
+	/**
 	 * Returns true if the program counter is in the range reserved for the
 	 * kernel.
 	 */
@@ -386,9 +403,9 @@ struct debug_trace_entry
 	 */
 	debug_trace_entry(const debug_trace_entry_disk_v1 &d, disassembler::disassembler &dis);
 	/**
-	 * Constructs an in-memory trace entry from an asm expression
+	 * Constructs an in-memory trace entry
 	 */
-	debug_trace_entry(const std::string &expr, disassembler::disassembler &dis);
+	debug_trace_entry();
 };
 
 /**
@@ -412,7 +429,7 @@ struct register_set
 	 */
 	std::array<capability_register, 32> cap_reg;
 	/**
-	 * Bitfield indicating whether the capability registers contain a known 
+	 * Bitfield indicating whether the capability registers contain a known
 	 * value.  Note that this is distinct from the `valid` field in the
 	 * `capability_register` structure, which indicates whether a known value
 	 * is a valid capability.
@@ -549,14 +566,33 @@ struct trace_view : public trace
 	virtual std::shared_ptr<trace_view> inverted_view() = 0;
 };
 /**
- * Abstract interface to modify trace files
+n * Trace writer
+ * For now only support append on v3 plain traces.
  */
-struct trace_writer
+class trace_writer : public std::enable_shared_from_this<trace_writer>
 {
+protected:
 	/**
-	 * Append instruction to the end of the trace file
+	 * Trace file (plain)
 	 */
-	virtual bool append(const debug_trace_entry &entry) = 0;
+	std::ofstream tracefile;
+	/**
+	 * cycle count from the start of the trace
+	 */
+	uint64_t cycles;
+	/**
+	 * Constructor from file path
+	 */
+	trace_writer(const std::string &file);
+public:
+	/**
+	 * Append entry to the end of the trace file
+	 */
+	bool append(const debug_trace_entry &entry);
+	/**
+	 * Construct a trace writer from a file
+	 */
+	static std::shared_ptr<trace_writer> open(const std::string &file);
 };
 }
 } // namespace cheri

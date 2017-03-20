@@ -3,6 +3,7 @@ set(TESTS
 	address_map.cc
 	debug.cc
 	assemble.cc
+	write.cc
 	disassemble.cc
 	disassemble_object.cc
 	filter.cc

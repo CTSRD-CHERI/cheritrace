@@ -38,7 +38,6 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/Endian.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -448,6 +447,5 @@ uint32_t assembler::assemble(const std::string &asmexpr)
 	assert(Res == 0 && "Failed to run MCAsmParser");
 	uint32_t opcode;
 	memcpy((void *)&opcode, instrBuffer.data(), sizeof(opcode));
-	opcode = llvm::support::endian::byte_swap<uint32_t, llvm::support::big>(opcode);
 	return opcode;
 }

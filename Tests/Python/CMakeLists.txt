@@ -1,22 +1,21 @@
 
+macro (add_python_test name)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${name}" "${CMAKE_CURRENT_BINARY_DIR}/${name}" COPYONLY)
+  set(test_name "py_${name}_test")
+  add_test(NAME ${test_name} COMMAND ${PYTHON_EXECUTABLE} -m pytest "${CMAKE_CURRENT_BINARY_DIR}/${name}")
+  set_property(TEST ${test_name} PROPERTY ENVIRONMENT
+    "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
+    "DYLD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
+    "CTEST_SOURCE_PATH=${CMAKE_SOURCE_DIR}/Tests"
+    "PYTHONPATH=${PYTHONPATH}:${PROJECT_BINARY_DIR}/Python")
+endmacro (add_python_test)
+
 if (PYTHON_BINDINGS)
   find_package(PythonInterp REQUIRED)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/simple.py ${CMAKE_CURRENT_BINARY_DIR}/simple.py COPYONLY)
-  add_test(NAME py_binding_test COMMAND ${PYTHON_EXECUTABLE} -m pytest ${CMAKE_CURRENT_BINARY_DIR}/simple.py)
-  set_property(TEST py_binding_test PROPERTY ENVIRONMENT
-    "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
-    "DYLD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
-    "CTEST_SOURCE_PATH=${CMAKE_SOURCE_DIR}/Tests"
-    "PYTHONPATH=${PYTHONPATH}:${PROJECT_BINARY_DIR}/Python")
-
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/instr_parser.py ${CMAKE_CURRENT_BINARY_DIR}/instr_parser.py COPYONLY)
-  add_test(NAME py_instr_parser COMMAND ${PYTHON_EXECUTABLE} -m pytest ${CMAKE_CURRENT_BINARY_DIR}/instr_parser.py)
-  set_property(TEST py_instr_parser PROPERTY ENVIRONMENT
-    "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
-    "DYLD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
-    "CTEST_SOURCE_PATH=${CMAKE_SOURCE_DIR}/Tests"
-    "PYTHONPATH=${PYTHONPATH}:${PROJECT_BINARY_DIR}/Python")
+  add_python_test(simple.py)
+  add_python_test(instr_parser.py)
+  add_python_test(instr_writer.py)
 endif (PYTHON_BINDINGS)
 
 

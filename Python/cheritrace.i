@@ -33,13 +33,14 @@
 // wrap STL types
 %shared_ptr(cheri::streamtrace::trace)
 %shared_ptr(cheri::streamtrace::trace_view)
+%shared_ptr(cheri::streamtrace::trace_writer)
 %template (GprArray) std::array<unsigned long long, 31>;
 %template (CapArray) std::array<cheri::streamtrace::capability_register, 32>;
 %template (GprBitset) std::bitset<31>;
 %template (CapBitset) std::bitset<32>;
 %template (OperandVector) std::vector<cheri::disassembler::operand_info>;
 %template (StringVector) std::vector<std::string>;
-/* Workaround missing support of nested unions (see accessors below) */
+/** Workaround missing support of nested unions (see accessors below) */
 %ignore cheri::streamtrace::debug_trace_entry::reg_value;
 
 /* Expose the MipsRegisterNames string array */

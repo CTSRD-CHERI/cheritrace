@@ -1811,6 +1811,8 @@ void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1,
 
 } // Anonymous namespace
 
+debug_trace_entry::debug_trace_entry() = default;
+
 	/**
 	 * Constructs an in-memory trace entry from the v2 on-disk format.
 	 */
@@ -1964,4 +1966,3 @@ void trace_segment::add_entry(disassembler::disassembler &d,
 		e.dead_cycles--;
 	}
 }
-

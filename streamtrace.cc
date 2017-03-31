@@ -1695,6 +1695,51 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val3,
 	cap.length = val5;
 	cap.offset = val3 - cap.base;
 }
+/**
+ * Decode a 128-bit capability register from streamtrace values.  `val2` is always
+ * `val2` from the streamtrace, but `val1` is either `val1` or `pc` depending
+ * on the trace format. val1/pc is the 1st half of the capability containing the
+ * pointer and val2 is the 2nd half of the compressed capability containing the
+ * bounds and permissions. 
+ */
+void decode_cap128(capability_register &cap, uint64_t val2, uint64_t val1)
+{
+	// extract the tag from the reserved bits where it has been stashed for tracing.
+	cap->valid = extract_bits<47>(val2);
+	cap->unsealed =	extract_bits<40>(val2);
+	cap->type =	0; // TODO extract type from typed capabilities
+	cap->permissions = extract_bits<63,49>(val2);
+	uint64_t exp     = extract_bits<46,41>(val2);
+	uint64_t mask    = ((uint64_t) ~0)<<20ULL;
+	mask <<= exp;
+	uint64_t ptr     = val1;
+	uint64_t botbits = extract_bits<39,20>(val2);//(half2>>20) & 0xFFFFFULL;
+	uint64_t bot     = (ptr&mask)|(botbits<<exp);
+	uint64_t topbits = (half2)     & 0xFFFFFULL;
+	uint64_t top     = (ptr&mask)|(topbits<<exp);
+	
+	uint64_t edgbits = (botbits-0x100ULL)&0xFFFFFULL;
+	uint64_t ptrbits = (ptr>>exp)&0xFFFFFULL;
+  uint8_t  ptrHi   = (ptrbits < edgbits);
+	uint8_t  botHi   = (botbits < edgbits);
+	uint8_t  topHi   = (topbits < edgbits);
+  
+  uint64_t bigOne = 1ULL<<(exp+20ULL);
+	// Calculate potential upper-bits fixup for the top.
+	uint64_t topfix = 0;
+	if (topHi  && !ptrHi) topfix =  bigOne;
+	if (!topHi && ptrHi)  topfix = -bigOne;
+	top = top + topfix;
+	// Calculate potential upper-bits fixup for the bottom.
+	uint64_t botfix = 0;
+	if (botHi  && !ptrHi) botfix =  bigOne;
+	if (!botHi && ptrHi)  botfix = -bigOne;
+	bot = bot + botfix;
+	// Fill the full address fields.
+	cap.offset = ptr - bot;
+	cap.base = bot;
+	cap.length = top - bot;
+}
 
 
 /**
@@ -1726,6 +1771,27 @@ void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1, uint64_t
 			e.is_store = true;
 			e.reg_value.gp = val2;
 			e.memory_address = val1;
+			break;
+		}
+		case 8:
+		{
+			decode_cap128(e.reg_value.cap, val2, val1);
+			break;
+		}
+		case 9:
+		{
+			e.is_load = true;
+			e.memory_address = val1;
+			decode_cap128(e.reg_value.cap, val2, e.pc);
+			e.pc = 0;
+			break;
+		}
+		case 10:
+		{
+			e.is_store = true;
+			decode_cap128(e.reg_value.cap, val2, e.pc);
+			e.memory_address = val1;
+			e.pc = 0;
 			break;
 		}
 		case 11:

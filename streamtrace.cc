@@ -1709,22 +1709,22 @@ void decode_cap128(capability_register &cap, uint64_t val2, uint64_t val1)
 	cap->unsealed =	extract_bits<40>(val2);
 	cap->type =	0; // TODO extract type from typed capabilities
 	cap->permissions = extract_bits<63,49>(val2);
-	uint64_t exp     = extract_bits<46,41>(val2);
-	uint64_t mask    = ((uint64_t) ~0)<<20ULL;
+	uint64_t exp = extract_bits<46,41>(val2);
+	uint64_t mask = ((uint64_t) ~0)<<20ULL;
 	mask <<= exp;
-	uint64_t ptr     = val1;
+	uint64_t ptr = val1;
 	uint64_t botbits = extract_bits<39,20>(val2);//(half2>>20) & 0xFFFFFULL;
-	uint64_t bot     = (ptr&mask)|(botbits<<exp);
-	uint64_t topbits = (half2)     & 0xFFFFFULL;
-	uint64_t top     = (ptr&mask)|(topbits<<exp);
+	uint64_t bot = (ptr&mask)|(botbits<<exp);
+	uint64_t topbits = (half2) & 0xFFFFFULL;
+	uint64_t top = (ptr&mask)|(topbits<<exp);
 	
 	uint64_t edgbits = (botbits-0x100ULL)&0xFFFFFULL;
 	uint64_t ptrbits = (ptr>>exp)&0xFFFFFULL;
-  uint8_t  ptrHi   = (ptrbits < edgbits);
-	uint8_t  botHi   = (botbits < edgbits);
-	uint8_t  topHi   = (topbits < edgbits);
+	uint8_t  ptrHi = (ptrbits < edgbits);
+	uint8_t  botHi = (botbits < edgbits);
+	uint8_t  topHi = (topbits < edgbits);
   
-  uint64_t bigOne = 1ULL<<(exp+20ULL);
+	uint64_t bigOne = 1ULL<<(exp+20ULL);
 	// Calculate potential upper-bits fixup for the top.
 	uint64_t topfix = 0;
 	if (topHi  && !ptrHi) topfix =  bigOne;

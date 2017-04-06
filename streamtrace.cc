@@ -1705,19 +1705,36 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val3,
 void decode_cap128(capability_register &cap, uint64_t val2, uint64_t val1)
 {
 	// extract the tag from the reserved bits where it has been stashed for tracing.
-	cap->valid = extract_bits<47>(val2);
-	cap->unsealed =	extract_bits<40>(val2);
-	cap->type =	0; // TODO extract type from typed capabilities
-	cap->permissions = extract_bits<63,49>(val2);
+	cap.valid = extract_bits<47>(val2);
+	// unsealed flag is at the top of the pair of 20-bit top and bottom fields.
+	cap.unsealed =	extract_bits<40>(val2);
+	// The type, if there was one, would be the bottom 10 bits of the top
+	// and bottom fields appended together.
+	cap.type = 0; // TODO extract type from typed capabilities
+	// The permissions are in the top of the 2nd word.
+	cap.permissions = extract_bits<63,49>(val2);
+	// The exponent for the top and bottom values.
 	uint64_t exp = extract_bits<46,41>(val2);
+	// Generate a mask for grabbing the bits of the pointer
+	// that we will reuse for the bounds.
 	uint64_t mask = ((uint64_t) ~0)<<20ULL;
 	mask <<= exp;
+	// The pointer is simply the 1st 64-bit value.
 	uint64_t ptr = val1;
+	// The 20-bit field holding 20-bits of the bottom bound.
 	uint64_t botbits = extract_bits<39,20>(val2);//(half2>>20) & 0xFFFFFULL;
+	// Shift if up, zeros at the bottom, and bits borrowed from the
+	// pointer at the top.
 	uint64_t bot = (ptr&mask)|(botbits<<exp);
+	// The 20-bit field holding 20-bits of the top bound.
 	uint64_t topbits = (half2) & 0xFFFFFULL;
+	// Shift them up, zeros at the bottom, bits borrowed from the
+	// pointer at the top.
 	uint64_t top = (ptr&mask)|(topbits<<exp);
 	
+	// Procedure described in the cheri architecture document for determining
+	// if the upper bits of the pointer should be adjusted by one for
+	// either of the bounds.
 	uint64_t edgbits = (botbits-0x100ULL)&0xFFFFFULL;
 	uint64_t ptrbits = (ptr>>exp)&0xFFFFFULL;
 	uint8_t  ptrHi = (ptrbits < edgbits);

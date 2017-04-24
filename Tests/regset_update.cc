@@ -19,7 +19,7 @@ static void expect_cap(int reg, const capability_register &cap)
 	assert(cap.offset == off);
 	assert(cap.length == 0xffffffffffffffff);
 	assert(cap.permissions == 0xffff);
-	assert(cap.type == 0x80000000);
+	assert(cap.type == 0x00);
 	assert(cap.valid);
 	/* XXXAM: there is some confusion about the sealed bit (see streamtrace.cc) */
 	/* assert(cap.unsealed); */

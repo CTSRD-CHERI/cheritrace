@@ -1632,7 +1632,7 @@ typename std::enable_if<std::is_unsigned<T>::value, T>::type extract_bits(T val)
 {
 	T mask = std::numeric_limits<T>::max();
 	mask >>= (sizeof(T)*8) - high - 1;
-	return (val >> low) & mask;
+	return (val & mask) >> low;
 }
 
 /**

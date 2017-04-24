@@ -62,7 +62,7 @@ void encode_cap(const capability_register &cap, uint64_t *val2, uint64_t *val3,
 		uint64_t *val4, uint64_t *val5)
 {
 	*val2 = (((uint64_t)cap.valid << 63) |
-		 (((uint64_t)cap.type << 32) & 0xffffff) |
+		 (((uint64_t)cap.type & 0xffffff) << 32) |
 		 ((uint64_t)cap.permissions << 1) | cap.unsealed);
 	*val3 = cap.offset + cap.base;
 	*val4 = cap.base;

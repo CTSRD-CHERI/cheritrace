@@ -61,3 +61,47 @@ def test_write_entry(asm, trace):
     assert result.is_store == entry.is_store
     assert result.is_load == entry.is_load
     assert result.memory_address == 0
+
+def test_write_cap_entry(asm, trace):
+
+    writer = pct.trace_writer.open(trace.name)
+    assert writer is not None
+
+    entry = pct.debug_trace_entry()
+    entry.pc = 0xdeadc0de;
+    entry.cycles = 100;
+    entry.inst = asm.assemble("cincoffset $c2, $c1, $at")
+    c2 = pct.capability_register()
+    c2.base = 0x1000
+    c2.offset = 0x1000
+    c2.length = 0x2000
+    c2.type = 0xdead
+    c2.permissions = 0xbeef
+    c2.valid = True
+    c2.unsealed = True
+    entry.reg_value_set(c2)
+    entry.reg_num = 66
+    entry.is_store = False
+    entry.is_load = False
+    writer.append(entry)
+
+    reader = pct.trace.open(trace.name)
+    assert reader is not None
+    assert reader.size() == 1
+    reader.seek_to(0)
+    result = reader.get_entry()
+    assert result.pc == entry.pc
+    assert result.cycles == entry.cycles
+    assert result.inst == entry.inst
+    cap = result.reg_value_cap()
+    assert cap.base == c2.base
+    assert cap.offset == c2.offset
+    assert cap.length == c2.length
+    assert cap.type == c2.type
+    assert cap.permissions == c2.permissions
+    assert cap.valid == c2.valid
+    assert cap.unsealed == c2.unsealed
+    assert result.reg_num == entry.reg_num
+    assert result.is_store == entry.is_store
+    assert result.is_load == entry.is_load
+    assert result.memory_address == 0

@@ -152,6 +152,9 @@ struct debug_trace_entry_disk_v3
 	uint8_t     asid;
 } __attribute__((packed));
 
+static_assert(sizeof(debug_trace_entry_disk_v3) == 58,
+	      "Debug trace record v3 is wrong!");
+
 /**
  * Format for on-disk trace entries from older versions of berictl.  These are
  * all stored in CHERI native endian (big endian).

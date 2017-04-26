@@ -90,7 +90,7 @@ trace_writer::trace_writer(const std::string &file) :
 		cycles = 0;
 	}
 	else {
-		size_t body = length - (sizeof("CheriTraceV03") + 1);
+		size_t body = length - sizeof(debug_trace_entry_disk_v3);
 		cycles = body / sizeof(debug_trace_entry_disk_v3);
 		assert(body % sizeof(debug_trace_entry_disk_v3) == 0);
 	}

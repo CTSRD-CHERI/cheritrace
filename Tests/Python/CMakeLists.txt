@@ -8,14 +8,15 @@ macro (add_python_test name)
     "DYLD_LIBRARY_PATH=${PROJECT_BINARY_DIR}"
     "CTEST_SOURCE_PATH=${CMAKE_SOURCE_DIR}/Tests"
     "PYTHONPATH=${PYTHONPATH}:${PROJECT_BINARY_DIR}/Python")
+
 endmacro (add_python_test)
 
 if (PYTHON_BINDINGS)
   find_package(PythonInterp REQUIRED)
-
   add_python_test(simple.py)
   add_python_test(instr_parser.py)
   add_python_test(instr_writer.py)
+  add_python_test(exception.py)
 endif (PYTHON_BINDINGS)
 
 

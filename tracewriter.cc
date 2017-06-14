@@ -34,7 +34,6 @@
 #include "streamtrace.hh"
 #include "disassembler.hh"
 #include <string>
-#include <string.h>
 #include <assert.h>
 
 using namespace cheri;

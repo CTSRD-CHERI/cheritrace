@@ -553,8 +553,11 @@ struct trace
 	 * specified notifier as it loads.  Note that the notifier will be called
 	 * from a separate thread - the user is responsible for ensuring that any
 	 * required synchronisation is performed.
+	 * Defer the loading of the trace until a location is requested if defer_preload is True.
+	 * Then ignore the part of the trace before such location, the loading is
+	 * only performed from the requested point onwards.
 	 */
-	static std::shared_ptr<trace> open(const std::string &file, notifier);
+	static std::shared_ptr<trace> open(const std::string &file, notifier, bool defer_preload);
 };
 /**
  * A view on a streamtrace.

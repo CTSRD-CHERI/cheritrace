@@ -16,7 +16,8 @@ set(TESTS
 	simple_v2.cc
 	disassemble_v2.cc
 	csetbounds.cc
-	regset_update.cc)
+	regset_update.cc
+	defer_preload.cc)
 
 foreach(TEST_SOURCE ${TESTS})
 	get_filename_component(TEST ${TEST_SOURCE} NAME_WE)

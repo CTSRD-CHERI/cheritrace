@@ -48,6 +48,9 @@
 #include <assert.h>
 #include <sys/mman.h>
 
+/* XXX */
+#include <iostream>
+
 #define expect(x, y)      __builtin_expect(!!(x), y)
 
 
@@ -550,6 +553,10 @@ class concrete_streamtrace : public trace,
 	 */
 	T begin, end;
 	/**
+	 * Wait to preload until scan is called.
+	 */
+	bool defer_preload = false;
+	/**
 	 * Start of the current cached segment.
 	 */
 	uint64_t segment_start = -1;
@@ -598,6 +605,7 @@ class concrete_streamtrace : public trace,
 	 * The callback that will be invoked when preloading.
 	 */
 	notifier callback;
+
 	/**
 	 * Scans the entire streamtrace and records keyframes for faster seeking.
 	 *
@@ -641,6 +649,79 @@ class concrete_streamtrace : public trace,
 		finished_loading = true;
 		notify.notify_all();
 	}
+
+	/**
+	 * Preload a slice of the trace instead of the whole trace
+	 * This is hacky but should speed up parallel loading.
+	 */
+	void preload_slice(uint64_t start, uint64_t end)
+	{
+		keyframe kf;
+		uint64_t kf_offset;
+		uint64_t kf_start = (start / keyframe_interval) * keyframe_interval;
+		uint64_t kf_end = (end / keyframe_interval + 1) * keyframe_interval;
+		uint64_t kf_entries = 0;
+		uint64_t backward_frames = 0;
+		uint64_t entries_loaded = 0;
+		T slice_begin = begin + kf_start;
+		/* last keyframe-aligned slice block */
+		if (kf_end > size())
+			kf_end = size();
+		T slice_end = begin + kf_end;
+		disassembler::disassembler d;
+
+		/* scan back until all the register set is valid or we reach
+		 * the start of the trace.
+		 */
+		std::cout << "preload_slice " << start << "-" << end << std::endl;
+		for (T i = slice_begin; i != begin; i+=-1) {
+			if (cancel)
+				return;
+			debug_trace_entry e(*i, d);
+			kf.update(e, d);
+			if (++kf_entries == keyframe_interval) {
+				backward_frames++;
+				kf_entries = 0;
+				/* if all registers are valid break */
+				if (kf.regs.valid_caps.all() && kf.regs.valid_gprs.all()) {
+					break;
+				}
+			}
+		}
+		std::cout << "backward_frames " << backward_frames << std::endl;
+		/* update the first keyframe offset */
+		kf_start -= backward_frames * keyframe_interval;
+		/* clear the keyframe */
+		kf = keyframe();
+		kf_entries = keyframe_interval - 1;
+		/**
+		 * Forward scan until we reach the end offset
+		 */
+		kf_offset = kf_start / keyframe_interval;
+		std::cout << "forward_load " << kf_start << "-" << kf_end << std::endl;
+		for (T i=begin + kf_start; i != slice_end; i+=1) {
+			entries_loaded++;
+			if (cancel)
+				return;
+			debug_trace_entry e(*i, d);
+			kf.update(e, d);
+			if (++kf_entries == keyframe_interval) {
+				kf_entries = 0;
+				std::lock_guard<std::mutex> lock(keyframe_lock);
+				keyframes.insert(keyframes.begin() + kf_offset++, kf);
+				notify.notify_all();
+				if (callback && callback(this, entries_loaded, false)) {
+					break;
+				}
+			}
+		}
+		if (callback) {
+			callback(this, entries_loaded, true);
+		}
+		finished_loading = true;
+		notify.notify_all();
+	}
+
 	/**
 	 * Returns the keyframe associated with a specific offset.  This is
 	 * thread-safe with respect to a thread running the `preload()` method.  It
@@ -697,23 +778,31 @@ class concrete_streamtrace : public trace,
 	/**
 	 * Construct a streamtrace from two iterators.
 	 */
-	concrete_streamtrace(T &&b, T &&e, notifier fn) : begin(b), end(e), callback(fn)
+	concrete_streamtrace(T &&b, T &&e, notifier fn, bool defer_preload) :
+		begin(b), end(e), defer_preload(defer_preload), callback(fn)
 	{
-		preload_thread = std::thread([&] { preload(); });
+		if (!defer_preload) {
+			preload_thread = std::thread([&] { preload(); });
+		}
 	}
 	~concrete_streamtrace()
 	{
 		cancel = true;
-		preload_thread.join();
+		std::cout << "joinable " << preload_thread.joinable() << std::endl;
+		if (preload_thread.joinable()) {
+			preload_thread.join();
+		}
 	}
 	uint64_t size() override
 	{
 		return end-begin;
 	}
+
 	uint64_t instruction_number_for_index(uint64_t idx) override
 	{
 		return idx;
 	}
+
 	void scan(scanner fn, uint64_t start, uint64_t scan_end, int opts) override
 	{
 		int inc;
@@ -732,16 +821,22 @@ class concrete_streamtrace : public trace,
 			start += inc;
 		}
 	}
+
 	void scan(detailed_scanner fn, uint64_t start, uint64_t scan_end, int opts=0) override
 	{
 		int inc;
-		if (!scan_range(start, scan_end, opts, inc, end-begin))
+		if (!scan_range(start, scan_end, opts, inc, end - begin))
 		{
 			return;
 		}
+		if (defer_preload) {
+			preload_thread = std::thread([&,start,scan_end] {
+					preload_slice(start, scan_end);
+				});
+		}
 		uint64_t segstart = -1;
 		std::unique_ptr<trace_segment> segment;
-		for (; start!=scan_end ; start+=inc)
+		for (; start != scan_end ; start += inc)
 		{
 			if (segstart != (start / keyframe_interval))
 			{
@@ -757,6 +852,7 @@ class concrete_streamtrace : public trace,
 			}
 		}
 	}
+
 	void scan(scanner fn) override
 	{
 		uint64_t count = 0;
@@ -1611,7 +1707,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
  */
 template<class T> inline
 std::shared_ptr<concrete_streamtrace<streamtrace_iterator<T>>>
-make_trace(filestream &file, off_t size, trace::notifier fn)
+make_trace(filestream &file, off_t size, trace::notifier fn, bool defer_preload)
 {
 	typedef streamtrace_iterator<T> iter;
 	iter begin(file, T::offset);
@@ -1619,7 +1715,7 @@ make_trace(filestream &file, off_t size, trace::notifier fn)
 	size -= (size - T::offset) % sizeof(typename T::format);
 	assert((size - T::offset) % sizeof(typename T::format) == 0);
 	iter end(file, size);
-	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end), fn);
+	return std::make_shared<concrete_streamtrace<iter>>(std::move(begin), std::move(end), fn, defer_preload);
 }
 
 
@@ -1903,7 +1999,7 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 	}
 }
 
-std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
+std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn, bool defer_preload=false)
 {
 	std::shared_ptr<trace> ret;
 	auto file = file::open(file_name);
@@ -1922,11 +2018,11 @@ std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 		{
 			return nullptr;
 		}
-		ret = make_trace<trace_v3_traits>(file, size, fn);
+		ret = make_trace<trace_v3_traits>(file, size, fn, defer_preload);
 	}
 	else if (strcmp(header.c_str(), "CheriStreamTrace") != 0)
 	{
-		ret = make_trace<trace_v1_traits>(file, size, fn);
+		ret = make_trace<trace_v1_traits>(file, size, fn, defer_preload);
 	}
 	else
 	{
@@ -1934,15 +2030,17 @@ std::shared_ptr<trace> trace::open(const std::string &file_name, notifier fn)
 		{
 			return nullptr;
 		}
-		ret = make_trace<trace_v2_traits>(file, size, fn);
+		ret = make_trace<trace_v2_traits>(file, size, fn, defer_preload);
 	}
 	return ret;
 }
+
 std::shared_ptr<trace> trace::open(const std::string &file_name)
 {
 	notifier fn = nullptr;
 	return trace::open(file_name, fn);
 }
+
 void trace_segment::add_entry(disassembler::disassembler &d,
                               keyframe &kf,
                               const debug_trace_entry &entry)

@@ -343,7 +343,7 @@ public:
 		assert(Emitter);
 	}
 
-	void EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI) override;
+	void EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI, bool PrintSchedInfo = false) override;
 	void EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
 			  uint64_t Size = 0, unsigned ByteAlignment = 0) override;
 	bool EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override;
@@ -367,7 +367,7 @@ void MCInstEncodingStreamer::EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t S
 	assert(false && "Not implemented");
 }
 
-void MCInstEncodingStreamer::EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI)
+void MCInstEncodingStreamer::EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI, bool PrintSchedInfo)
 {
 	llvm::SmallVector<llvm::MCFixup, 4> Fixups;
 	Emitter->encodeInstruction(Inst, OS, Fixups, STI);

@@ -33,7 +33,7 @@
 
 #include "streamtrace.hh"
 #include "disassembler.hh"
-#include <string>
+#include <cstring>
 #include <assert.h>
 
 using namespace cheri;
@@ -84,7 +84,7 @@ trace_writer::trace_writer(const std::string &file) :
 	char buffer[sizeof(debug_trace_entry_disk_v3)];
 	if (length == 0) {
 		buffer[0] = (char)0x83;
-		memcpy(buffer+1, "CheriTraceV03", sizeof("CheriTraceV03"));
+		std::memcpy(buffer+1, "CheriTraceV03", sizeof("CheriTraceV03"));
 		tracefile.write(buffer, sizeof(buffer));
 		cycles = 0;
 	}

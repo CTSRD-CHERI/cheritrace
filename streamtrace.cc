@@ -658,13 +658,12 @@ class concrete_streamtrace : public trace,
 	{
 		keyframe kf;
 		uint64_t kf_offset;
-		uint64_t kf_start = (start / keyframe_interval) * keyframe_interval;
-		uint64_t kf_end = (end / keyframe_interval + 1) * keyframe_interval;
-		uint64_t kf_entries = 0;
-		uint64_t backward_frames = 0;
-		uint64_t entries_loaded = 0;
-		T slice_begin = begin + kf_start;
+		uint64_t kf_entries;
+		int entries_loaded = 0;
+		T slice_begin = begin + start;
+		T slice_preload_begin = begin;
 		/* last keyframe-aligned slice block */
+		uint64_t kf_end = (end / keyframe_interval + 1) * keyframe_interval;
 		if (kf_end > size())
 			kf_end = size();
 		T slice_end = begin + kf_end;
@@ -673,33 +672,22 @@ class concrete_streamtrace : public trace,
 		/* scan back until all the register set is valid or we reach
 		 * the start of the trace.
 		 */
-		std::cout << "preload_slice " << start << "-" << end << std::endl;
-		for (T i = slice_begin; i != begin; i+=-1) {
+		while (slice_begin != begin) {
 			if (cancel)
 				return;
-			debug_trace_entry e(*i, d);
+			debug_trace_entry e(*slice_begin, d);
 			kf.update(e, d);
-			if (++kf_entries == keyframe_interval) {
-				backward_frames++;
-				kf_entries = 0;
-				/* if all registers are valid break */
-				if (kf.regs.valid_caps.all() && kf.regs.valid_gprs.all()) {
-					break;
-				}
+			if (kf.regs.valid_caps.all() && kf.regs.valid_gprs.all()) {
+				break;
 			}
+			--slice_begin;
 		}
-		std::cout << "backward_frames " << backward_frames << std::endl;
-		/* update the first keyframe offset */
-		kf_start -= backward_frames * keyframe_interval;
-		/* clear the keyframe */
+		/* start preloading at keyframe boundary */
+		slice_preload_begin += slice_begin - begin - (slice_begin - begin) % keyframe_interval;
 		kf = keyframe();
 		kf_entries = keyframe_interval - 1;
-		/**
-		 * Forward scan until we reach the end offset
-		 */
-		kf_offset = kf_start / keyframe_interval;
-		std::cout << "forward_load " << kf_start << "-" << kf_end << std::endl;
-		for (T i=begin + kf_start; i != slice_end; i+=1) {
+		kf_offset = (slice_preload_begin - begin) / keyframe_interval;
+		for (T i=slice_preload_begin; i != slice_end; ++i) {
 			entries_loaded++;
 			if (cancel)
 				return;
@@ -788,7 +776,6 @@ class concrete_streamtrace : public trace,
 	~concrete_streamtrace()
 	{
 		cancel = true;
-		std::cout << "joinable " << preload_thread.joinable() << std::endl;
 		if (preload_thread.joinable()) {
 			preload_thread.join();
 		}
@@ -830,6 +817,13 @@ class concrete_streamtrace : public trace,
 			return;
 		}
 		if (defer_preload) {
+			if (preload_thread.joinable()) {
+				cancel = true;
+				preload_thread.join();
+				cancel = false;
+			}
+			keyframes.clear();
+			finished_loading = false;
 			preload_thread = std::thread([&,start,scan_end] {
 					preload_slice(start, scan_end);
 				});
@@ -1666,6 +1660,13 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 		return *this;
 	}
 	/**
+	 * Move the offset within the file backwards.
+	 */
+	iter &operator--() {
+		offset -= sizeof(typename Traits::format) * 1;
+		return *this;
+	}
+	/**
 	 * Move the offset within the file forwards.
 	 */
 	iter &operator+=(int x) {
@@ -1699,6 +1700,14 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	{
 		assert(file == o.file);
 		return offset != o.offset;
+	}
+	/**
+	 * Compares two iterators.  Undefined if they point to different files.
+	 */
+	bool operator==(streamtrace_iterator<Traits> &o)
+	{
+		assert(file == o.file);
+		return offset == o.offset;
 	}
 };
 

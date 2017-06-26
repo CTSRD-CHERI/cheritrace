@@ -48,15 +48,15 @@ int main()
 
 	trace->scan(scan_function, 0, 4, cheri::streamtrace::trace::forewards);
 	assert(regs_tested);
-	// count = 0;
+	count = 0;
 
-	// trace->scan([&](const debug_trace_entry &e, const register_set &regs, uint64_t idx) {
-	// 		count++;
-	// 		assert(e.pc == pcs[idx]);
-	// 		assert(e.inst == instrs[idx]);
-	// 		return false;
-	// 	}, 2, 4, cheri::streamtrace::trace::backwards);
-	// assert(count == 3);
+	trace->scan([&](const debug_trace_entry &e, const register_set &regs, uint64_t idx) {
+			count++;
+			assert(e.pc == pcs[idx]);
+			assert(e.inst == instrs[idx]);
+			return false;
+		}, 2, 4, cheri::streamtrace::trace::backwards);
+	assert(count == 3);
 
 	return 0;
 }

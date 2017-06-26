@@ -1,5 +1,6 @@
 // swig interface definition for the cheritrace library
 
+/* %module(threads="1") pycheritrace */
 %module pycheritrace
 
 %include "std_string.i";
@@ -21,14 +22,6 @@
 // unsupported by SWIG
 #define __attribute__(x)
 #define static_assert(x,y)
-
-/* XXX Ignore trace::(string, notifier) as the notifier callback need
- *  some more work.
- * The notifier is saved in the thread, we must Py_INCREF the object?
- * may need to acquire the GIL from the loading thread
- */
-/* %ignore cheri::streamtrace::trace::open; */
-/* %rename("%s") cheri::streamtrace::trace::open(const std::string&); */
 
 // wrap STL types
 %shared_ptr(cheri::streamtrace::trace)
@@ -262,43 +255,50 @@ cheri::streamtrace::trace::filter_predicate
 /**
  * trace::open notifier handling
  */
-%typemap (in)
-cheri::streamtrace::trace::notifier
+%typemap (in) cheri::streamtrace::trace::notifier
 {
-	if (!PyCallable_Check($input)) {
-		$1 = nullptr;
-	}
-	else {
-		$1 = [$input](cheri::streamtrace::trace *trace, uint64_t entries, bool done) {
-			PyObject *py_trace;
-			PyObject *args;
-			PyObject *result;
-			int c_result;
-			/*
-			 * Third argument (flags) stop delegation of ownership of the copy object
-			 * to swig so it will not free() it based on the python object refcount.
-			 */
-			py_trace = SWIG_NewPointerObj(SWIG_as_voidptr(trace),
-						      SWIGTYPE_p_cheri__streamtrace__trace,
-						      0);
-			args = Py_BuildValue("(OKi)", py_trace, entries, done);
-			result = PyObject_Call($input, args, NULL);
-			if (!result) {
-				/* stop scanning if there is an exception */
-				c_result = 1;
-			}
-			else {
-				/* do not strictly check for a PyBool,
-				 * it is more pythonic to accept anything
-				 */
-				c_result = PyObject_IsTrue(result);
-				Py_DECREF(result);
-			}
-			Py_DECREF(args);
-			Py_DECREF(py_trace);
-			return (bool)c_result;
-		};
-	}
+	/* XXX currently disabled due to a crash */
+	$1 = nullptr;
+	/* if (!PyCallable_Check($input)) { */
+	/* 	$1 = nullptr; */
+	/* } */
+	/* else { */
+	/* 	$1 = [$input](cheri::streamtrace::trace *trace, uint64_t entries, bool done) { */
+	/* 		PyObject *py_trace; */
+	/* 		PyObject *args; */
+	/* 		PyObject *result; */
+	/* 		int c_result; */
+	/* 		PyGILState_STATE gil_state = PyGILState_Ensure(); */
+	/* 		/\* */
+	/* 		 * Third argument (flags) stop delegation of ownership of the copy object */
+	/* 		 * to swig so it will not free() it based on the python object refcount. */
+	/* 		 *\/ */
+	/* 		py_trace = SWIG_NewPointerObj(trace, SWIGTYPE_p_cheri__streamtrace__trace, 0); */
+	/* 		args = Py_BuildValue("(OKO)", py_trace, entries, done ? Py_True : Py_False); */
+	/* 		result = PyObject_Call($input, args, NULL); */
+	/* 		if (!result) { */
+	/* 			/\* stop scanning if there is an exception *\/ */
+	/* 			c_result = 1; */
+	/* 		} */
+	/* 		else { */
+	/* 			/\* do not strictly check for a PyBool, */
+	/* 			 * it is more pythonic to accept anything */
+	/* 			 *\/ */
+	/* 			c_result = PyObject_IsTrue(result); */
+	/* 			Py_DECREF(result); */
+	/* 		} */
+	/* 		Py_DECREF(args); */
+	/* 		Py_DECREF(py_trace); */
+	/* 		PyGILState_Release(gil_state); */
+	/* 		return (bool)c_result; */
+	/* 	}; */
+	/* } */
+}
+
+/* the notifier can be a callable or None */
+%typemap (typecheck, precedence=SWIG_TYPECHECK_INTEGER) cheri::streamtrace::trace::notifier
+{
+	$1 = PyCallable_Check($input) || $input == Py_None;
 }
 
 

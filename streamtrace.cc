@@ -657,8 +657,8 @@ class concrete_streamtrace : public trace,
 	void preload_slice(uint64_t start, uint64_t end)
 	{
 		keyframe kf;
-		uint64_t kf_offset;
 		uint64_t kf_entries;
+		int kf_offset;
 		int entries_loaded = 0;
 		T slice_begin = begin + start;
 		T slice_preload_begin = begin;
@@ -683,11 +683,17 @@ class concrete_streamtrace : public trace,
 			--slice_begin;
 		}
 		/* start preloading at keyframe boundary */
-		slice_preload_begin += slice_begin - begin - (slice_begin - begin) % keyframe_interval;
 		kf = keyframe();
+		slice_preload_begin += slice_begin - begin - (slice_begin - begin) % keyframe_interval;
 		kf_entries = keyframe_interval - 1;
 		kf_offset = (slice_preload_begin - begin) / keyframe_interval;
-		for (T i=slice_preload_begin; i != slice_end; ++i) {
+		{
+			std::lock_guard<std::mutex> lock(keyframe_lock);
+			for (int i = 0; i < kf_offset; i++) {
+				keyframes.push_back(std::move(keyframe()));
+			}
+		}
+		for (T i = slice_preload_begin; i != slice_end; ++i) {
 			entries_loaded++;
 			if (cancel)
 				return;
@@ -696,7 +702,7 @@ class concrete_streamtrace : public trace,
 			if (++kf_entries == keyframe_interval) {
 				kf_entries = 0;
 				std::lock_guard<std::mutex> lock(keyframe_lock);
-				keyframes.insert(keyframes.begin() + kf_offset++, kf);
+				keyframes.push_back(kf);
 				notify.notify_all();
 				if (callback && callback(this, entries_loaded, false)) {
 					break;

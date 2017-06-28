@@ -668,6 +668,10 @@ class concrete_streamtrace : public trace,
 			kf_end = size();
 		T slice_end = begin + kf_end;
 		disassembler::disassembler d;
+		/* XXXAM instead of masking c27-c30 we should have the generic code here and add NOPs to the kernel
+		 * to dump the c27-c30 in the trace at every context switch.
+		 */
+		std::bitset<32> mask("10000111111111111111111111111111");
 
 		/* scan back until all the register set is valid or we reach
 		 * the start of the trace.
@@ -677,7 +681,8 @@ class concrete_streamtrace : public trace,
 				return;
 			debug_trace_entry e(*slice_begin, d);
 			kf.update(e, d);
-			if (kf.regs.valid_caps.all() && kf.regs.valid_gprs.all()) {
+			if (kf.regs.valid_gprs.all() &&
+			    (kf.regs.valid_caps & mask).count() == 28) {
 				break;
 			}
 			--slice_begin;
@@ -1549,7 +1554,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 */
 	typedef streamtrace_iterator<Traits> iter;
 	/**
-	 * Offset within the file of this of this iterator.
+	 * Offset within the file of this iterator.
 	 */
 	uint64_t offset = 0;
 	/**
@@ -1557,6 +1562,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 	 */
 	filestream file;
 	/**
+	 * Enumerator used to load from the file
 	 */
 	mutable file::enumerator e;
 	/**
@@ -1618,7 +1624,7 @@ class streamtrace_iterator : public std::iterator<std::random_access_iterator_ta
 					{
 						return *reinterpret_cast<typename Traits::format*>(little_buffer);
 					}
-					assert(off_by_bytes > 0);
+					assert(off_by_bytes >= 0);
 					buffer_start += bytes_to_copy;
 					file->enumerate(e, buffer_start);
 				}

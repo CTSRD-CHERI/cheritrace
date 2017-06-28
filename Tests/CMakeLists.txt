@@ -18,7 +18,8 @@ set(TESTS
 	csetbounds.cc
 	regset_update.cc
 	defer_preload.cc
-	defer_preload_long.cc)
+	defer_preload_long.cc
+	defer_helloworld.cc)
 
 foreach(TEST_SOURCE ${TESTS})
 	get_filename_component(TEST ${TEST_SOURCE} NAME_WE)

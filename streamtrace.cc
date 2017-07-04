@@ -687,12 +687,15 @@ class concrete_streamtrace : public trace,
 			}
 			--slice_begin;
 		}
+		std::cerr << "gpr registers validity: " << kf.regs.valid_gprs.to_string() <<
+			" cap registers validity: " << kf.regs.valid_caps.to_string() << std::endl;
 		/* start preloading at keyframe boundary */
 		kf = keyframe();
 		slice_preload_begin += slice_begin - begin - (slice_begin - begin) % keyframe_interval;
 		kf_entries = keyframe_interval - 1;
 		kf_offset = (slice_preload_begin - begin) / keyframe_interval;
 		{
+			/* fill the initial part of the keyframes vector with empty frames */
 			std::lock_guard<std::mutex> lock(keyframe_lock);
 			for (int i = 0; i < kf_offset; i++) {
 				keyframes.push_back(std::move(keyframe()));

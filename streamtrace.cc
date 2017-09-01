@@ -48,9 +48,6 @@
 #include <assert.h>
 #include <sys/mman.h>
 
-/* XXX */
-#include <iostream>
-
 #define expect(x, y)      __builtin_expect(!!(x), y)
 
 

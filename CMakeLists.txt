@@ -46,9 +46,17 @@ string(REGEX REPLACE "([0-9]*).([0-9]*).*" "-DLLVM_MAJOR=\\1 -DLLVM_MINOR=\\2"  
 
 FIND_PACKAGE(LibLZMA REQUIRED)
 
+# option(WITH_BOOST "Enable boost-dependant features" ON)
+# if (WITH_BOOST)
+  find_package(Boost REQUIRED "serialization")
+  include_directories(SYSTEM "${Boost_INCLUDE_DIRS}")
+  target_link_libraries(cheritrace "${Boost_LIBRARIES}")
+  # Boost serialization requires rtti
+  set(BOOST_CXX_FLAGS "-frtti -DWITH_BOOST")
+# endif (WITH_BOOST)
 
 include_directories(SYSTEM ${LibLZMA_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION} ${BOOST_CXX_FLAGS}")
 target_link_libraries(cheritrace ${LLVM_LDFLAGS} ${LLVM_LIBS_FLAGS} ${LLVM_SYSTEMLIBS} ${LIBLZMA_LIBRARIES})
 set(CMAKE_SKIP_RPATH true)
 

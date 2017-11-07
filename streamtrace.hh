@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2017 Alfredo Mazzinghi
  * Copyright (c) 2015 David T. Chisnall
  *
  * All rights reserved.
@@ -545,6 +546,12 @@ struct trace
 	 */
 	virtual ~trace();
 	/**
+	 * Save the keyframes to the given file.
+	 * This should only be called when keyframe preloading have finished, if
+	 * the preloader is still running nothing will be saved.
+	 */
+	virtual void save_keyframes(const std::string &file);
+	/**
 	 * Constructs a new streamtrace from the specified file.
 	 */
 	static std::shared_ptr<trace> open(const std::string &file);
@@ -553,11 +560,13 @@ struct trace
 	 * specified notifier as it loads.  Note that the notifier will be called
 	 * from a separate thread - the user is responsible for ensuring that any
 	 * required synchronisation is performed.
-	 * Defer the loading of the trace until a location is requested if defer_preload is True.
-	 * Then ignore the part of the trace before such location, the loading is
-	 * only performed from the requested point onwards.
 	 */
-	static std::shared_ptr<trace> open(const std::string &file, notifier, bool defer_preload);
+	static std::shared_ptr<trace> open(const std::string &file, notifier notify);
+	/**
+	 * Constructs a new streamtrace and load the keyframes from the given file,
+	 * if the keyframes loading fails no trace is created and nullptr is returned.
+	 */
+	static std::shared_ptr<trace> open(const std::string &file, const std::string &keyframes_file);
 };
 /**
  * A view on a streamtrace.

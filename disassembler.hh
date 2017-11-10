@@ -190,6 +190,11 @@ class assembler {
 public:
 	assembler();
 	~assembler();
+	/**
+	 * Assemble a single instruction.
+	 * Note that the result endianness is the one of the target
+	 * and not the one of the host.
+	 */
 	uint32_t assemble(const std::string &asmexpr);
 };
 

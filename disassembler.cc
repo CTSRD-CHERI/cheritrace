@@ -361,6 +361,7 @@ void MCInstEncodingStreamer::EmitZerofill(llvm::MCSection *Section, llvm::MCSymb
 bool MCInstEncodingStreamer::EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute)
 {
 	assert(false && "Not implemented");
+	return false;
 }
 void MCInstEncodingStreamer::EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment)
 {

@@ -51,8 +51,6 @@
 #include <sys/mman.h>
 
 #ifdef WITH_BOOST
-/* XXXAM: throw_exception should not be required but it seems to be a missing include otherwise */
-#include <boost/throw_exception.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/array.hpp>

@@ -428,7 +428,7 @@ uint32_t assembler::assemble(const std::string &asmexpr)
 	/* make context */
 	llvm::MCContext Ctx(MAI.get(), MRI.get(), &MOFI, &SrcMgr);
 	assert(Ctx.getRegisterInfo() && "Register info is NULL");
-	MOFI.InitMCObjectFileInfo(targetTriple, /*PIC*/ false, llvm::CodeModel::Model::Default, Ctx);
+	MOFI.InitMCObjectFileInfo(targetTriple, /*PIC*/ false, Ctx);
 
 	llvm::SmallString<256> instrBuffer;
 	llvm::raw_svector_ostream OS(instrBuffer);

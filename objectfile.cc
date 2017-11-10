@@ -195,7 +195,7 @@ class concrete_file : public file, public std::enable_shared_from_this<concrete_
 		}
 		objectFileHolder = std::move(of.get());
 		objectFile = objectFileHolder.getBinary();
-		debugInfo.reset(new llvm::DWARFContextInMemory(*objectFile));
+		debugInfo = llvm::DWARFContext::create(*objectFile);
 		return true;
 	}
 	line_info debug_info_for_address(uint64_t address) override;

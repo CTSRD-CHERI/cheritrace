@@ -542,15 +542,15 @@ struct trace
 	 */
 	virtual std::shared_ptr<trace_view> filter(filter_predicate) = 0;
 	/**
-	 * Destructor.
-	 */
-	virtual ~trace();
-	/**
 	 * Save the keyframes to the given file.
 	 * This should only be called when keyframe preloading have finished, if
 	 * the preloader is still running nothing will be saved.
 	 */
-	virtual void save_keyframes(const std::string &file);
+	virtual void save_keyframes(const std::string &file) = 0;
+	/**
+	 * Destructor.
+	 */
+	virtual ~trace();
 	/**
 	 * Constructs a new streamtrace from the specified file.
 	 */

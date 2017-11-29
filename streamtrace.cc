@@ -50,16 +50,6 @@
 #include <assert.h>
 #include <sys/mman.h>
 
-#ifdef WITH_BOOST
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/serialization/array.hpp>
-#include <boost/serialization/bitset.hpp>
-#include <boost/serialization/vector.hpp>
-#else
-#include <exception>
-#endif
-
 #define expect(x, y)      __builtin_expect(!!(x), y)
 
 using namespace cheri;
@@ -204,6 +194,14 @@ struct keyframe
 	 * determine the target register for the instruction.
 	 */
 	void update(const debug_trace_entry &, disassembler::disassembler &);
+	/**
+	 * Serialize the keyframe to an ostream
+	 */
+	friend std::ostream& operator<<(std::ostream &os, const keyframe &kf);
+	/**
+	 * Unserialize the keyframe from an istream
+	 */
+	friend std::istream& operator>>(std::istream &is, keyframe &kf);
 };
 
 /**
@@ -646,11 +644,11 @@ class concrete_streamtrace : public trace,
 				}
 			}
 		}
+		finished_loading = true;
 		if (callback)
 		{
 			callback(this,  frames_loaded, true);
 		}
-		finished_loading = true;
 		notify.notify_all();
 	}
 
@@ -729,21 +727,21 @@ class concrete_streamtrace : public trace,
 	concrete_streamtrace(T &&b, T &&e, const std::string &keyframe_file) :
 		begin(b), end(e), callback(nullptr)
 	{
-#ifdef WITH_BOOST
-		std::ifstream keyframe_istream(keyframe_file);
-		boost::archive::binary_iarchive keyframe_archive(keyframe_istream);
-		keyframe_archive >> keyframes;
+		std::ifstream keyframe_istream(keyframe_file,
+		      std::ios::in | std::ios::binary);
+		keyframe kf;
+		while (keyframe_istream.peek() != EOF && !keyframe_istream.eof()) {
+			keyframe_istream >> kf;
+			keyframes.push_back(kf);
+		}
 		finished_loading = true;
-#else
-		throw std::exception("Unsupported feature " __func__
-				     " requires cheritrace with boost support");
-#endif
 	}
 
 	~concrete_streamtrace()
 	{
 		cancel = true;
-		preload_thread.join();
+		if (preload_thread.joinable())
+			preload_thread.join();
 	}
 	uint64_t size() override
 	{
@@ -859,16 +857,12 @@ class concrete_streamtrace : public trace,
 
 	virtual void save_keyframes(const std::string &file) override
 	{
-#ifdef WITH_BOOST
 		if (finished_loading) {
-			std::ofstream keyframe_ostream(file);
-			boost::archive::binary_oarchive keyframe_archive(keyframe_ostream);
-			keyframe_archive << keyframes;
+			std::ofstream keyframe_ostream(
+			      file, std::ios::out | std::ios::binary);
+			for (keyframe &kf : keyframes)
+				keyframe_ostream << kf;
 		}
-#else
-		throw std::exception("Unsupported feature " __func__
-				     " requires cheritrace with boost support");
-#endif
 	}
 };
 
@@ -1932,64 +1926,38 @@ void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1,
 	}
 }
 
+std::ostream& operator<<(std::ostream &os, const keyframe &kf)
+{
+	unsigned long tmp;
+
+	os.write((const char *)&kf, sizeof(keyframe) - sizeof(register_set));
+	os.write((const char *)kf.regs.gpr.data(), 31 * sizeof(uint64_t));
+	tmp = kf.regs.valid_gprs.to_ulong();
+	os.write((const char *)&tmp, sizeof(unsigned long));
+	tmp = kf.regs.valid_caps.to_ulong();
+	os.write((const char *)&tmp, sizeof(unsigned long));
+	os.write((const char *)kf.regs.cap_reg.data(),
+		 kf.regs.cap_reg.size() * sizeof(capability_register));
+	return os;
+}
+
+std::istream& operator>>(std::istream &is, keyframe &kf)
+{
+	unsigned long tmp;
+
+	is.read((char *)&kf, sizeof(keyframe) - sizeof(register_set));
+	is.read((char *)kf.regs.gpr.data(),
+		kf.regs.gpr.size() * sizeof(decltype(kf.regs.gpr)::value_type));
+	is.read((char *)&tmp, sizeof(unsigned long));
+	kf.regs.valid_gprs = tmp;
+	is.read((char *)kf.regs.cap_reg.data(),
+		kf.regs.cap_reg.size() * sizeof(decltype(kf.regs.cap_reg)::value_type));
+	is.read((char *)&tmp, sizeof(unsigned long));
+	kf.regs.valid_caps = tmp;
+	return is;
+}
+
 } // Anonymous namespace
-
-#ifdef WITH_BOOST
-
-BOOST_SERIALIZATION_SPLIT_FREE(capability_register)
-
-namespace boost {
-namespace serialization {
-
-/**
- * Keyframe serialization handler
- */
-template<class Archive>
-void serialize(Archive &ar, keyframe &kf, const unsigned int version)
-{
-	ar & kf.cycles;
-	ar & kf.pc;
-	ar & kf.cycle_counter;
-	ar & kf.regs;
-}
-
-template<class Archive>
-void serialize(Archive &ar, register_set &regset, const unsigned int version)
-{
-	ar & regset.gpr;
-	ar & regset.valid_gprs;
-	ar & regset.cap_reg;
-	ar & regset.valid_caps;
-}
-
-template<class Archive>
-void load(Archive &ar, capability_register &capreg, const unsigned int version)
-{
-	ar & capreg.base;
-	ar & capreg.length;
-	ar & capreg.offset;
-	ar & capreg.type;
-	ar & capreg.permissions;
-	uint8_t flags;
-	ar & flags;
-	capreg.valid = (flags & 0x2) >> 1;
-	capreg.unsealed = (flags & 0x1);
-}
-
-template<class Archive>
-void save(Archive &ar, const capability_register &capreg, const unsigned int version)
-{
-	ar & capreg.base;
-	ar & capreg.length;
-	ar & capreg.offset;
-	ar & capreg.type;
-	ar & capreg.permissions;
-	uint8_t flags = (capreg.valid << 1) | capreg.unsealed;
-	ar & flags;
-}
-
-}} // boost::serialization
-#endif /* WITH_BOOST */
 
 debug_trace_entry::debug_trace_entry() = default;
 

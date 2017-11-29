@@ -16,12 +16,8 @@ set(TESTS
 	simple_v2.cc
 	disassemble_v2.cc
 	csetbounds.cc
-	regset_update.cc)
-
-if (WITH_BOOST)
-  list(APPEND TESTS
-    keyframe_serialize.cc)
-endif (WITH_BOOST)
+	regset_update.cc
+	keyframe_serialize.cc)
 
 foreach(TEST_SOURCE ${TESTS})
 	get_filename_component(TEST ${TEST_SOURCE} NAME_WE)

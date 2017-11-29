@@ -23,9 +23,9 @@ instr = [("daddiu $1, $1, 64\n", 0x40002164),
          ("ld $1, 0x10($4)", 0x100081dc),
          ("jalr $t9", 0x09f82003),
          ("csc $c1, $at, 0x10($c4)", 0x010824f8),
-         ("cincoffset $c12, $c2, $at", 0x4010ac49),
+         ("cincoffset $c12, $c2, $at", 0x51100c48),
          ("cgetpccsetoffset $c1, $at\n", 0xff090148),
-         ("cjalr $c12, $c17\n", 0x0060f148)]
+         ("cjalr $c12, $c17\n", 0x3f631148)]
 
 @pytest.mark.parametrize("expr,expected", instr)
 def test_assemble(asm, expr, expected):

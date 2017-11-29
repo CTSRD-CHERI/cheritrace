@@ -44,19 +44,11 @@ exec_program(${LLVM_CONFIG}
 	OUTPUT_VARIABLE LLVM_SYSTEMLIBS)
 string(REGEX REPLACE "([0-9]*).([0-9]*).*" "-DLLVM_MAJOR=\\1 -DLLVM_MINOR=\\2"  LLVM_VERSION "${LLVM_VER}")
 
-FIND_PACKAGE(LibLZMA REQUIRED)
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+string(REPLACE "-DNDEBUG" ""  LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
+endif ()
 
-option(WITH_BOOST "Enable boost-dependant features" ON)
-if (WITH_BOOST)
-  find_package(Boost REQUIRED "serialization")
-  include_directories(SYSTEM "${Boost_INCLUDE_DIRS}")
-  target_link_libraries(cheritrace "${Boost_LIBRARIES}")
-  # Boost serialization requires exceptions and rtti
-  set(BOOST_CXX_FLAGS "-DWITH_BOOST -fexceptions")
-  if (LLVM_CXXFLAGS MATCHES "-fno-rtti")
-    message(FATAL_ERROR "Boost support requires a version of LLVM with RTTI enabled.")
-  endif ()
-endif (WITH_BOOST)
+FIND_PACKAGE(LibLZMA REQUIRED)
 
 include_directories(SYSTEM ${LibLZMA_INCLUDE_DIRS})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION} ${BOOST_CXX_FLAGS}")

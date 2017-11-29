@@ -7,6 +7,7 @@
 
 using cheri::streamtrace::capability_register;
 using cheri::streamtrace::register_set;
+using cheri::streamtrace::debug_trace_entry;
 using cheri::streamtrace::trace;
 using namespace std;
 
@@ -23,17 +24,16 @@ static struct reg_info registers[] = {
 	 * XXXAM: rerun the test program with the fixed qemu to generate a trace
 	 * with the correct valid and sealed bits.
 	 */
-	/* index, regnum, {base, offset, length, type, perms, valid, (un?)sealed} */
-	{14, 1, {0x00, 0x10000000000, 0x12007b900, 0x00, 0x0000807d, 1, 0}},
-	{15, 3, {0x12007b900, 0x03, 0x00, 0x00, 0x0000807d, 1, 0}},
-	{26, 3, {0x12007b900, 0x03, 0x00, 0x00, 0x0000807d, 1, 0}},
-	{26, 3, {0x12007b900, 0x03, 0x00, 0x00, 0x0000807d, 1, 0}},
-	{29, 3, {0x12007b900, 0x03, 0x00, 0x00, 0x0000807d, 1, 0}},
-	{32, 3, {0x12007b900, 0x03, 0x00, 0x00, 0x0000807d, 1, 0}},
+	/* index, regnum, {base, length, offset, type, perms, valid, (un?)sealed} */
+	{3, 1, {0x00, 0x12053e000, 0x1200e4100, 0x00, 0x0000817d, 1, 0}}, // cfromptr
+	{4, 1, {0x1200e4100, 0x28, 0x00, 0x00, 0x0000817d, 1, 0}}, // csetbounds
+	{27, 2, {0x00, 0x12053e000, 0x1200e4128, 0x00, 0x0000817d, 1, 0}}, // cfromptr
+	{28, 2, {0x1200e4128, 0x28, 0x00, 0x00, 0x0000817d, 1, 0}}, // csetbounds
+	{47, 1, {0x1200e4100, 0x28, 0x04, 0x00, 0x0000817d, 1, 0}}, // cincoffset
 	{-1, -1, 0} /* sentinel */
 };
 
-bool
+void
 assert_cap_equal(capability_register &reg, capability_register &expect)
 {
 	assert(reg.base == expect.base);
@@ -53,11 +53,14 @@ int main()
 	struct reg_info *info = registers;
 	bool success;
 	register_set regset;
+	debug_trace_entry entry;
       
 	while (info->index > 0) {
 		success = trace->seek_to(info->index);
 		assert(success);
 		regset = trace->get_regs();
+		entry = trace->get_entry();
+		assert(info->regnum == entry.capreg_number());
 		assert_cap_equal(regset.cap_reg[info->regnum], info->cap);
 		info++;
 	}

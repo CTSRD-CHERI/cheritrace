@@ -127,6 +127,7 @@ cheri::streamtrace::trace::scanner
 			args = Py_BuildValue("(O)", trace_entry);
 			result = PyObject_Call($input, args, NULL);
 			if (!result) {
+				PyErr_Print();
 				c_result = 1;
 			}
 			else {
@@ -174,6 +175,7 @@ cheri::streamtrace::trace::scanner
 			args = Py_BuildValue("(OOK)", trace_entry, register_set, idx);
 			result = PyObject_Call($input, args, NULL);
 			if (!result) {
+				PyErr_Print();
 				c_result = 1;
 			}
 			else {
@@ -261,21 +263,25 @@ cheri::streamtrace::trace::filter_predicate
 	/* $1 = nullptr; */
 	if (!PyCallable_Check($input))
 		SWIG_exception(SWIG_TypeError, "Object not callable");
-	$1 = [$input](cheri::streamtrace::trace *trace, uint64_t entries, bool done) {
+	$1 = [$input](std::shared_ptr<cheri::streamtrace::trace> trace, uint64_t entries, bool done) {
 	  PyObject *py_trace;
 	  PyObject *args;
 	  PyObject *result;
 	  int c_result;
+	  std::shared_ptr<cheri::streamtrace::trace> *proxyptr = new std::shared_ptr<cheri::streamtrace::trace>(trace);
 	  PyGILState_STATE gil_state = PyGILState_Ensure();
 	  /*
 	   * Third argument (flags) stop delegation of ownership of the copy object
 	   * to swig so it will not free() it based on the python object refcount.
 	   */
-	  py_trace = SWIG_NewPointerObj(trace, SWIGTYPE_p_cheri__streamtrace__trace, 0);
+	  py_trace = SWIG_NewPointerObj(SWIG_as_voidptr(proxyptr),
+					SWIGTYPE_p_std__shared_ptrT_cheri__streamtrace__trace_t,
+					SWIG_POINTER_OWN);
 	  args = Py_BuildValue("(OKO)", py_trace, entries, done ? Py_True : Py_False);
 	  result = PyObject_Call($input, args, NULL);
 	  if (!result) {
 	    /* stop scanning if there is an exception */
+	    PyErr_Print();
 	    c_result = 1;
 	  }
 	  else {

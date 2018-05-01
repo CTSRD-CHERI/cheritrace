@@ -27,6 +27,8 @@ def test_notify(tracefile):
         if done:
             context["done"] = True
             evt.set()
+        else:
+            assert entries < trace.size()
         return False
 
     trace = pct.trace.open(tracefile, notifier)

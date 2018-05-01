@@ -15,7 +15,7 @@ int main()
 	std::string tmp = std::tmpnam(nullptr);
 
 	// Test opening a trace with a notifier callback
-	auto notify = [&, tmp](trace *tr, uint64_t entries, bool done) -> bool
+	auto notify = [&, tmp](std::shared_ptr<trace> tr, uint64_t entries, bool done) -> bool
 		{
 			if (done) {
 				std::lock_guard<std::mutex> lock(mtx);

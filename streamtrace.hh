@@ -470,7 +470,7 @@ struct trace
 	 * loading.  The return value should be false if the traces should continue
 	 * loading, true otherwise.
 	 */
-	typedef std::function<bool(trace*, uint64_t, bool)> notifier;
+	typedef std::function<bool(std::shared_ptr<trace>, uint64_t, bool)> notifier;
 	/**
 	 * Callback for scanning the streamtrace.  The first argument is the trace
 	 * entry, the second the index in the trace.  The function should return

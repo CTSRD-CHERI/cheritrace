@@ -638,7 +638,7 @@ class concrete_streamtrace : public trace,
 				std::lock_guard<std::mutex> lock(keyframe_lock);
 				keyframes.push_back(kf);
 				notify.notify_all();
-				if (callback && callback(this,  frames_loaded, false))
+				if (callback && callback(this->shared_from_this(), frames_loaded, false))
 				{
 					break;
 				}
@@ -647,7 +647,7 @@ class concrete_streamtrace : public trace,
 		finished_loading = true;
 		if (callback)
 		{
-			callback(this,  frames_loaded, true);
+			callback(this->shared_from_this(), frames_loaded, true);
 		}
 		notify.notify_all();
 	}

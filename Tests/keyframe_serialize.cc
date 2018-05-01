@@ -15,13 +15,14 @@ int main()
 	std::string tmp = std::tmpnam(nullptr);
 
 	// Test opening a trace with a notifier callback
-	auto notify = [&](trace *tr, uint64_t entries, bool done) -> bool
+	auto notify = [&, tmp](trace *tr, uint64_t entries, bool done) -> bool
 		{
 			if (done) {
 				std::lock_guard<std::mutex> lock(mtx);
 				tr->save_keyframes(tmp);
 				preload_done.notify_one();
 			}
+			return false;
 		};
 	std::unique_lock<std::mutex> lock(mtx);
 	auto trace = trace::open(SOURCE_PATH "/long.trace", notify);

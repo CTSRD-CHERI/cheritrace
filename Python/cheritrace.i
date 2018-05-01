@@ -258,41 +258,38 @@ cheri::streamtrace::trace::filter_predicate
 %typemap (in) cheri::streamtrace::trace::notifier
 {
 	/* XXX currently disabled due to a crash */
-	$1 = nullptr;
-	/* if (!PyCallable_Check($input)) { */
-	/* 	$1 = nullptr; */
-	/* } */
-	/* else { */
-	/* 	$1 = [$input](cheri::streamtrace::trace *trace, uint64_t entries, bool done) { */
-	/* 		PyObject *py_trace; */
-	/* 		PyObject *args; */
-	/* 		PyObject *result; */
-	/* 		int c_result; */
-	/* 		PyGILState_STATE gil_state = PyGILState_Ensure(); */
-	/* 		/\* */
-	/* 		 * Third argument (flags) stop delegation of ownership of the copy object */
-	/* 		 * to swig so it will not free() it based on the python object refcount. */
-	/* 		 *\/ */
-	/* 		py_trace = SWIG_NewPointerObj(trace, SWIGTYPE_p_cheri__streamtrace__trace, 0); */
-	/* 		args = Py_BuildValue("(OKO)", py_trace, entries, done ? Py_True : Py_False); */
-	/* 		result = PyObject_Call($input, args, NULL); */
-	/* 		if (!result) { */
-	/* 			/\* stop scanning if there is an exception *\/ */
-	/* 			c_result = 1; */
-	/* 		} */
-	/* 		else { */
-	/* 			/\* do not strictly check for a PyBool, */
-	/* 			 * it is more pythonic to accept anything */
-	/* 			 *\/ */
-	/* 			c_result = PyObject_IsTrue(result); */
-	/* 			Py_DECREF(result); */
-	/* 		} */
-	/* 		Py_DECREF(args); */
-	/* 		Py_DECREF(py_trace); */
-	/* 		PyGILState_Release(gil_state); */
-	/* 		return (bool)c_result; */
-	/* 	}; */
-	/* } */
+	/* $1 = nullptr; */
+	if (!PyCallable_Check($input))
+		SWIG_exception(SWIG_TypeError, "Object not callable");
+	$1 = [$input](cheri::streamtrace::trace *trace, uint64_t entries, bool done) {
+	  PyObject *py_trace;
+	  PyObject *args;
+	  PyObject *result;
+	  int c_result;
+	  PyGILState_STATE gil_state = PyGILState_Ensure();
+	  /*
+	   * Third argument (flags) stop delegation of ownership of the copy object
+	   * to swig so it will not free() it based on the python object refcount.
+	   */
+	  py_trace = SWIG_NewPointerObj(trace, SWIGTYPE_p_cheri__streamtrace__trace, 0);
+	  args = Py_BuildValue("(OKO)", py_trace, entries, done ? Py_True : Py_False);
+	  result = PyObject_Call($input, args, NULL);
+	  if (!result) {
+	    /* stop scanning if there is an exception */
+	    c_result = 1;
+	  }
+	  else {
+	    /* do not strictly check for a PyBool,
+	     * it is more pythonic to accept anything
+	     */
+	    c_result = PyObject_IsTrue(result);
+	    Py_DECREF(result);
+	  }
+	  Py_DECREF(args);
+	  Py_DECREF(py_trace);
+	  PyGILState_Release(gil_state);
+	  return (bool)c_result;
+	};
 }
 
 /* the notifier can be a callable or None */

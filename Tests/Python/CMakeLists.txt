@@ -17,6 +17,7 @@ if (PYTHON_BINDINGS)
   add_python_test(instr_parser.py)
   add_python_test(instr_writer.py)
   add_python_test(exception.py)
+  add_python_test(notifier.py)
 endif (PYTHON_BINDINGS)
 
 

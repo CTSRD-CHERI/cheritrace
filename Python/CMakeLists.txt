@@ -13,8 +13,8 @@ endif ()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -Wno-cast-qual -frtti")
 
-set_source_files_properties(${pycheritrace_SWIG_IF} PROPERTIES
-  CPLUSPLUS ON)
+set_property(SOURCE ${pycheritrace_SWIG_IF} PROPERTY CPLUSPLUS ON)
+  
 set_source_files_properties(${swig_generated_file_fullname} PROPERTIES
   COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION}")
 
@@ -23,9 +23,10 @@ set(SWIG_MODULE_pycheritrace_EXTRA_DEPS "std_bitset.i" ${cheritrace_HDRS})
 
 include_directories(${PYTHON_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-swig_add_module(pycheritrace python ${pycheritrace_SWIG_IF})
-swig_link_libraries(pycheritrace ${LLVM_LDFLAGS} ${LLVM_LIBS_FLAGS}
-  ${LLVM_SYSTEMLIBS} ${LIBLZMA_LIBRARIES} cheritrace)
+swig_add_library(pycheritrace
+	LANGUAGE python
+	SOURCES ${pycheritrace_SWIG_IF})
+swig_link_libraries(pycheritrace cheritrace)
 add_dependencies(${SWIG_MODULE_pycheritrace_REAL_NAME} cheritrace)
 
 # we should use python distutils only for installation since distutils

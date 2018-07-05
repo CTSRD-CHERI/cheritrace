@@ -31,8 +31,9 @@ int main()
 	auto trace = cheri::streamtrace::trace::open(SOURCE_PATH "/regset_update.trace");
 	assert(trace);
 	bool success = trace->seek_to(trace->size() - 1);	
-	assert(success);	
+	assert(success);
 	auto regs = trace->get_regs();
+	// XXX-AM: skip c0 for now since we are transitioning to cnull.
 	for (int i = 0; i < 32; i++)
 	{
 		/* $zero is not stored for GPRs, indexed from 1 */

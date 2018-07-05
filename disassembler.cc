@@ -75,8 +75,19 @@ int registerIndexForString(const char *str)
 		str++;
 	}
 	char *end;
-	if (str[0] == 'c')
+	if (strcmp(str, "cnull") == 0)
 	{
+		// same as C0
+		return 64;
+	}
+	if (strcmp(str, "ddc") == 0)
+	{
+		// special case, this is the same as chwr_ddc
+		return 96;
+	}
+	if (str[0] == 'c' && str[1] != 'h')
+	{
+		// GP capability register, not a capability hardware register
 		str++;
 		long idx = strtol(str, &end, 10);
 		if (str == end)
@@ -87,6 +98,7 @@ int registerIndexForString(const char *str)
 	}
 	if (str[0] == 'f' && str[1] != 'p')
 	{
+		// float register, not frame pointer
 		str++;
 		long idx = strtol(str, &end, 10);
 		if (str == end)
@@ -102,6 +114,7 @@ int registerIndexForString(const char *str)
 	}
 	for (size_t i=0 ; i<(sizeof(MipsRegisterNames) / sizeof(*MipsRegisterNames)) ; i++)
 	{
+		// other register name or hardware capability register
 		if (strcmp(str, MipsRegisterNames[i]) == 0)
 		{
 			return (int)i;
@@ -145,7 +158,8 @@ int disassembler_impl::registerIndexForLLVMRegNo(unsigned regNo)
 	std::string regName;
 	llvm::raw_string_ostream regStream(regName);
 	instrPrinter->printRegName(regStream, regNo);
-	return registerIndexForString(regStream.str().c_str());
+	int idx = registerIndexForString(regStream.str().c_str());
+	return idx;
 }
 
 disassembler::disassembler()
@@ -254,7 +268,7 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 	info.is_call = desc.isCall();
 	const uint16_t *implicitDefs = desc.getImplicitDefs();
 	unsigned numImplicitDefs = desc.getNumImplicitDefs();
-	for (unsigned i=0 ; i<numImplicitDefs ; i++)
+	for (unsigned i = 0; i < numImplicitDefs; i++)
 	{
 		int regNo = pimpl->registerIndexForLLVMRegNo(implicitDefs[i]);
 		if (regNo >= 0)
@@ -272,19 +286,24 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 			{
 				int regNo = pimpl->registerIndexForLLVMRegNo(op0.getReg());
 				if (regNo >= 0)
-				{
 					info.destination_register = regNo;
-				}
 			}
+			// else if (info.name.find("cwritehwr") != std::string::npos) {
+			// 	/*
+			// 	 * XXX-AM: Handle this case specially because cwritehwr
+			// 	 * in LLVM does not have a valid output register description.
+			// 	 */
+			// 	int regNo = pimpl->registerIndexForLLVMRegNo(inst.getOperand(1).getReg());
+			// 	if (regNo >= 0)
+			// 		info.destination_register = regNo;
+			// }
 		}
 	}
 	if ((info.destination_register == -1) && desc.mayStore())
 	{
 		int regNo = pimpl->registerIndexForLLVMRegNo(inst.getOperand(0).getReg());
 		if (regNo >= 0)
-		{
 			info.destination_register = regNo;
-		}
 	}
 
 	/* Extract operands of the instruction */

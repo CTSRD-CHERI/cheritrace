@@ -66,9 +66,9 @@ def test_incoffsetimm(trace, disasm):
     assert op1.register_number == 65
     assert op2.immediate == 4
 
-def test_cfromptr(trace, disasm):
+def test_cfromddc(trace, disasm):
     """
-    Test parsing for cfromptr $c1, $c0, $3
+    Test parsing for cfromddc $c1, $3
     """
     inst = get_inst_at(trace, disasm, 3)
     assert len(inst.operands) == 3
@@ -77,7 +77,7 @@ def test_cfromptr(trace, disasm):
     assert_is_register(op1)
     assert_is_register(op2)
     assert op0.register_number == 65
-    assert op1.register_number == 64
+    assert op1.register_number == 96
     assert op2.register_number == 3
 
 def test_cap_load(trace, disasm):

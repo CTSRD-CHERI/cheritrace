@@ -4,6 +4,7 @@ Check that the notifier callback works and can be called
 import os
 import pytest
 import threading
+import tempfile
 
 import pycheritrace as pct
 
@@ -14,6 +15,7 @@ def tracefile():
 
 def test_notify(tracefile):
 
+    tmp = tempfile.NamedTemporaryFile()
     evt = threading.Event()
     evt.clear()
 
@@ -26,6 +28,7 @@ def test_notify(tracefile):
         context["count"] = entries
         if done:
             context["done"] = True
+            trace.save_keyframes(tmp.name)
             evt.set()
         else:
             assert entries < trace.size()

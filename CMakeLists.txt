@@ -43,6 +43,7 @@ exec_program(${LLVM_CONFIG}
 	ARGS --system-libs
 	OUTPUT_VARIABLE LLVM_SYSTEMLIBS)
 string(REGEX REPLACE "([0-9]*).([0-9]*).*" "-DLLVM_MAJOR=\\1 -DLLVM_MINOR=\\2"  LLVM_VERSION "${LLVM_VER}")
+string(REGEX REPLACE "-l/usr/lib/libexecinfo.so" "-lexecinfo" LLVM_SYSTEMLIBS "${LLVM_SYSTEMLIBS}")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 string(REPLACE "-DNDEBUG" ""  LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")

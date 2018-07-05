@@ -56,6 +56,7 @@ def test_detail_scan_builtin_exception(tracefile):
     assert trace is not None, "Failed to open tracefile %s" % tracefile
 
     def scanner(e, r, idx):
+        print("Scanning", idx)
         raise ValueError("TESTING")
 
     with pytest.raises(ValueError):

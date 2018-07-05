@@ -127,7 +127,6 @@ cheri::streamtrace::trace::scanner
 			args = Py_BuildValue("(O)", trace_entry);
 			result = PyObject_Call($input, args, NULL);
 			if (!result) {
-				PyErr_Print();
 				c_result = 1;
 			}
 			else {
@@ -175,7 +174,6 @@ cheri::streamtrace::trace::scanner
 			args = Py_BuildValue("(OOK)", trace_entry, register_set, idx);
 			result = PyObject_Call($input, args, NULL);
 			if (!result) {
-				PyErr_Print();
 				c_result = 1;
 			}
 			else {

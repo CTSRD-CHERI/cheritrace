@@ -1930,14 +1930,18 @@ std::ostream& operator<<(std::ostream &os, const keyframe &kf)
 {
 	unsigned long tmp;
 
-	os.write((const char *)&kf, sizeof(keyframe) - sizeof(register_set));
-	os.write((const char *)kf.regs.gpr.data(), 31 * sizeof(uint64_t));
+	os.write(reinterpret_cast<const char *>(&kf),
+		 sizeof(keyframe) - sizeof(register_set));
+	os.write(reinterpret_cast<const char *>(kf.regs.gpr.data()),
+		 kf.regs.gpr.size() * sizeof(uint64_t));
 	tmp = kf.regs.valid_gprs.to_ulong();
-	os.write((const char *)&tmp, sizeof(unsigned long));
-	tmp = kf.regs.valid_caps.to_ulong();
-	os.write((const char *)&tmp, sizeof(unsigned long));
-	os.write((const char *)kf.regs.cap_reg.data(),
+	os.write(reinterpret_cast<const char *>(&tmp),
+		 sizeof(unsigned long));
+	os.write(reinterpret_cast<const char *>(kf.regs.cap_reg.data()),
 		 kf.regs.cap_reg.size() * sizeof(capability_register));
+	tmp = kf.regs.valid_caps.to_ulong();
+	os.write(reinterpret_cast<const char *>(&tmp),
+		 sizeof(unsigned long));
 	return os;
 }
 
@@ -1945,14 +1949,15 @@ std::istream& operator>>(std::istream &is, keyframe &kf)
 {
 	unsigned long tmp;
 
-	is.read((char *)&kf, sizeof(keyframe) - sizeof(register_set));
-	is.read((char *)kf.regs.gpr.data(),
-		kf.regs.gpr.size() * sizeof(decltype(kf.regs.gpr)::value_type));
-	is.read((char *)&tmp, sizeof(unsigned long));
+	is.read(reinterpret_cast<char *>(&kf),
+		sizeof(keyframe) - sizeof(register_set));
+	is.read(reinterpret_cast<char *>(kf.regs.gpr.data()),
+		kf.regs.gpr.size() * sizeof(uint64_t));
+	is.read(reinterpret_cast<char *>(&tmp), sizeof(unsigned long));
 	kf.regs.valid_gprs = tmp;
-	is.read((char *)kf.regs.cap_reg.data(),
-		kf.regs.cap_reg.size() * sizeof(decltype(kf.regs.cap_reg)::value_type));
-	is.read((char *)&tmp, sizeof(unsigned long));
+	is.read(reinterpret_cast<char *>(kf.regs.cap_reg.data()),
+		kf.regs.cap_reg.size() * sizeof(capability_register));
+	is.read(reinterpret_cast<char *>(&tmp), sizeof(unsigned long));
 	kf.regs.valid_caps = tmp;
 	return is;
 }
@@ -2038,6 +2043,12 @@ void keyframe::update(const debug_trace_entry &e, disassembler::disassembler &di
 		int capr = e.capreg_number();
 		regs.cap_reg[capr] = e.reg_value.cap;
 		regs.valid_caps[capr] = true;
+	}
+	if (e.caphwreg_number() >= 0)
+	{
+		int hwcapr = e.caphwreg_number();
+		regs.cap_hwreg[hwcapr] = e.reg_value.cap;
+		regs.valid_hwcaps[hwcapr] = true;
 	}
 	// If the trace entry doesn't have a PC, then assume that it's not a
 	// branch or exception target and that it follows the last one.

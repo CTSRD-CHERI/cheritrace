@@ -159,6 +159,14 @@ static const char* const MipsRegisterNames[] = {
 	"c20", "c21", "c22", "c23",
 	"c24", "c25", "c26", "c27",
 	"c28", "c29", "c30", "c31",
+	"chwr_ddc", "chwr_userlocal", "chwr2", "chwr3",
+	"chwr4", "chwr5", "chwr6", "chwr7",
+	"chwr_priv_userlocal", "chwr9", "chwr10", "chwr11",
+	"chwr12", "chwr13", "chwr14", "chwr15",
+	"chwr16", "chwr17", "chwr18", "chwr19",
+	"chwr20", "chwr21", "chwr_kr1c", "chwr_kr2c",
+	"chwr24", "chwr25", "chwr26", "chwr27",
+	"chwr28", "chwr_kcc", "chwr_kdc", "chwr_epcc"
 };
 
 struct disassembler_impl;

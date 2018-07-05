@@ -132,7 +132,8 @@ bool trace_writer::append(const debug_trace_entry &entry)
 		}
 	}
 	else {
-		if (entry.capreg_number() != -1) {
+		if (entry.capreg_number() != -1 ||
+		    entry.caphwreg_number() != -1) {
 			version = EntryVersion::CVT_CAP;
 			encode_cap(entry.reg_value.cap, &disk_entry.val2,
 				   &disk_entry.val3, &disk_entry.val4,

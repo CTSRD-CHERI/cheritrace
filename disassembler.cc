@@ -34,6 +34,7 @@
 #include "disassembler.hh"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/SMLoc.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/TargetSelect.h"
@@ -364,7 +365,7 @@ public:
 
 	void EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI, bool PrintSchedInfo = false) override;
 	void EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol = nullptr,
-			  uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+			  uint64_t Size = 0, unsigned ByteAlignment = 0, llvm::SMLoc Loc = llvm::SMLoc()) override;
 	bool EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override;
 	void EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment) override;
 };
@@ -372,7 +373,7 @@ public:
 }
 
 void MCInstEncodingStreamer::EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol,
-					  uint64_t Size, unsigned ByteAlignment)
+					  uint64_t Size, unsigned ByteAlignment, llvm::SMLoc Loc)
 {
 	assert(false && "Not implemented");
 }

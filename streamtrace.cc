@@ -1980,7 +1980,7 @@ debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk &d,
 	exception(cheri_byte_order_to_host(d.exception)),
 	is_load(0),
 	is_store(0),
-	reg_num((d.version == 4) ? 100 : dis.disassemble(inst).destination_register)
+	reg_num((d.version == 4) ? 255 : dis.disassemble(inst).destination_register)
 {
 	if (d.version != 4)
 	{
@@ -2002,7 +2002,7 @@ debug_trace_entry::debug_trace_entry(const debug_trace_entry_disk_v3 &d,
 	exception(cheri_byte_order_to_host(d.exception)),
 	is_load(0),
 	is_store(0),
-	reg_num((d.version == 4) ? 100 : dis.disassemble(inst).destination_register)
+	reg_num((d.version == 4) ? 255 : dis.disassemble(inst).destination_register)
 {
 	if (d.version != 4)
 	{

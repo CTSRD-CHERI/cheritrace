@@ -23,7 +23,7 @@ def test_notify(tracefile):
         "count": 0,
         "done": False
     }
-    
+
     def notifier(trace, entries, done):
         context["count"] = entries
         if done:

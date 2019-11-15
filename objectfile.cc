@@ -106,7 +106,7 @@ class concrete_function : public function
 	 */
 	concrete_function(std::shared_ptr<concrete_file> &&f,
 	                  uint64_t start,
-	                  StringRef contents, 
+	                  StringRef contents,
 	                  StringRef mangledName,
 	                  StringRef secName) :
 		file(f), base(start), mangled(mangledName.str()), sectionName(secName.str()),
@@ -259,17 +259,23 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 			continue;
 		}
 		SectionRef sec = *section.get();
-		StringRef secName;
-		sec.getName(secName);
-		StringRef contents;
-		sec.getContents(contents);
-		contents = contents.substr(start - sec.getAddress(), size);
+    Expected<StringRef> secName = sec.getName();
+    if (!secName)
+    {
+      continue;
+    }
+    Expected<StringRef> secContents = sec.getContents();
+    if (!secContents)
+    {
+      continue;
+    }
+    StringRef contents = secContents.get().substr(start - sec.getAddress(), size);
 		return std::make_shared<concrete_function>(
 				std::move(shared_this),
 				start,
-				contents, 
+				contents,
 				std::move(name.get()),
-				std::move(secName));
+				std::move(secName.get()));
 	}
 	for (const SectionRef &sec : objectFile->sections())
 	{
@@ -279,16 +285,22 @@ std::shared_ptr<function> concrete_file::function_at_address(uint64_t address)
 		{
 			continue;
 		}
-		StringRef secName;
-		sec.getName(secName);
-		StringRef contents;
-		sec.getContents(contents);
+		Expected<StringRef> secName = sec.getName();
+    if (!secName)
+    {
+      continue;
+    }
+    Expected<StringRef> secContents = sec.getContents();
+    if (!secContents)
+    {
+      continue;
+    }
 		return std::make_shared<concrete_function>(
 				std::move(shared_this),
 				start,
-				contents,
-				secName,
-				secName);
+				secContents.get(),
+				secName.get(),
+				secName.get());
 	}
 
 	return nullptr;
@@ -299,7 +311,11 @@ line_info concrete_file::debug_info_for_address(uint64_t address)
 	{
 		return {"","",0,0};
 	}
-	auto line = debugInfo->getLineInfoForAddress(address);
+  llvm::object::SectionedAddress secAddress = {
+    .Address = address,
+    .SectionIndex = llvm::object::SectionedAddress::UndefSection
+  };
+	auto line = debugInfo->getLineInfoForAddress(secAddress);
 	line_info li = {line.FileName, line.FunctionName, line.Line, line.Column };
 	return li;
 }

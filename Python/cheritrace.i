@@ -55,10 +55,11 @@ const std::vector<std::string> mips_register_names;
 %typemap (in)
 cheri::streamtrace::trace::scanner
 {
-	if (!PyCallable_Check($input)) {
+	if (!PyCallable_Check($input))
 		SWIG_exception(SWIG_TypeError, "Object not callable");
-	}
-	$1 = [$input](cheri::streamtrace::debug_trace_entry entry, uint64_t idx) {
+
+  PyObject *callable = $input;
+	$1 = [callable](cheri::streamtrace::debug_trace_entry entry, uint64_t idx) {
 		PyObject *trace_entry;
 		PyObject *args;
 		PyObject *result;
@@ -74,7 +75,7 @@ cheri::streamtrace::trace::scanner
 						 SWIGTYPE_p_cheri__streamtrace__debug_trace_entry,
 						 1);
 		args = Py_BuildValue("(OK)", trace_entry, idx);
-		result = PyObject_Call($input, args, NULL);
+		result = PyObject_Call(callable, args, NULL);
 		if (!result) {
 			/* stop scanning if there is an exception */
 			c_result = 1;
@@ -105,10 +106,11 @@ cheri::streamtrace::trace::scanner
 
 %typemap (in) cheri::streamtrace::trace::filter_predicate
 {
-	if (!PyCallable_Check($input)) {
+	if (!PyCallable_Check($input))
 		SWIG_exception(SWIG_TypeError, "Object not callable");
-	}
-	$1 = [$input](const cheri::streamtrace::debug_trace_entry &entry)
+
+  PyObject *callable = $input;
+	$1 = [callable](const cheri::streamtrace::debug_trace_entry &entry)
 		{
 			PyObject *trace_entry;
 			PyObject *args;
@@ -125,7 +127,7 @@ cheri::streamtrace::trace::scanner
 							 SWIGTYPE_p_cheri__streamtrace__debug_trace_entry,
 							 1);
 			args = Py_BuildValue("(O)", trace_entry);
-			result = PyObject_Call($input, args, NULL);
+			result = PyObject_Call(callable, args, NULL);
 			if (!result) {
 				c_result = 1;
 			}
@@ -147,7 +149,8 @@ cheri::streamtrace::trace::scanner
 	if (!PyCallable_Check($input))
 		SWIG_exception(SWIG_TypeError, "Object not callable");
 
-	$1 = [$input](const cheri::streamtrace::debug_trace_entry &entry,
+  PyObject *callable = $input;
+	$1 = [callable](const cheri::streamtrace::debug_trace_entry &entry,
 		      const cheri::streamtrace::register_set &regset,
 		      uint64_t idx)
 		{
@@ -172,7 +175,7 @@ cheri::streamtrace::trace::scanner
 							  SWIGTYPE_p_cheri__streamtrace__register_set,
 							  1);
 			args = Py_BuildValue("(OOK)", trace_entry, register_set, idx);
-			result = PyObject_Call($input, args, NULL);
+			result = PyObject_Call(callable, args, NULL);
 			if (!result) {
 				c_result = 1;
 			}
@@ -257,11 +260,11 @@ cheri::streamtrace::trace::filter_predicate
  */
 %typemap (in) cheri::streamtrace::trace::notifier
 {
-	/* XXX currently disabled due to a crash */
-	/* $1 = nullptr; */
 	if (!PyCallable_Check($input))
 		SWIG_exception(SWIG_TypeError, "Object not callable");
-	$1 = [$input](std::shared_ptr<cheri::streamtrace::trace> trace, uint64_t entries, bool done) {
+
+  PyObject *callable = $input;
+	$1 = [callable](std::shared_ptr<cheri::streamtrace::trace> trace, uint64_t entries, bool done) {
 	  PyObject *py_trace;
 	  PyObject *args;
 	  PyObject *result;
@@ -276,7 +279,7 @@ cheri::streamtrace::trace::filter_predicate
 					SWIGTYPE_p_std__shared_ptrT_cheri__streamtrace__trace_t,
 					SWIG_POINTER_OWN);
 	  args = Py_BuildValue("(OKO)", py_trace, entries, done ? Py_True : Py_False);
-	  result = PyObject_Call($input, args, NULL);
+	  result = PyObject_Call(callable, args, NULL);
 	  if (!result) {
 	    /* stop scanning if there is an exception */
 	    PyErr_Print();

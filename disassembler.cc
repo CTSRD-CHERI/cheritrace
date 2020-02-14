@@ -180,6 +180,7 @@ disassembler_impl::disassembler_impl()
 	static std::unique_ptr<const llvm::MCInstrInfo> mii;
 	static std::unique_ptr<const llvm::MCInstrAnalysis> mia;
 	static llvm::Triple targetTriple;
+	static llvm::MCTargetOptions MCOptions;
 
 	LLVMInitializeMipsTargetInfo();
 	LLVMInitializeMipsTargetMC();
@@ -214,7 +215,7 @@ disassembler_impl::disassembler_impl()
 		assert(MRI != 0);
 		mri.reset(MRI);
 		assert(mri && "Failed to create MCRegisterInfo");
-		asmInfo.reset(target->createMCAsmInfo(*mri, triple));
+		asmInfo.reset(target->createMCAsmInfo(*mri, triple, MCOptions));
 		assert(asmInfo && "Failed to create MCAsmInfo");
 		sti.reset(target->createMCSubtargetInfo(triple, "", features));
 		assert(sti && "Failed to create MCSubtargetInfo");
@@ -244,14 +245,14 @@ instruction_info disassembler::disassemble(uint32_t anInstruction)
 	llvm::MCInst inst;
 	uint64_t size;
 	auto status = pimpl->disAsm->getInstruction(inst, size, instbytes, 0,
-			llvm::errs(), llvm::errs());
+			llvm::errs());
 	if (status != llvm::MCDisassembler::Success)
 	{
 		info.name = "<Unable to disassemble>";
 		return info;
 	}
 	llvm::raw_string_ostream os(info.name);
-	pimpl->instrPrinter->printInst(&inst, os, "", *sti);
+	pimpl->instrPrinter->printInst(&inst, 0, "", *sti, os);
 	os.str();
 	auto &desc = MipsInsts[inst.getOpcode()];
 	if (desc.isBranch() || desc.isCall() || desc.isReturn())
@@ -424,7 +425,7 @@ assembler_impl::assembler_impl()
 	MRI.reset(target->createMCRegInfo(cheriTriple));
 	assert(MRI && "Unable to create target register info");
 	/* make asm info asmInfo */
-	MAI.reset(target->createMCAsmInfo(*MRI, cheriTriple));
+	MAI.reset(target->createMCAsmInfo(*MRI, cheriTriple, MCOptions));
 	assert(MAI && "Failed to create MCAsmInfo");
 	/* create mc instr info mcii */
 	MCII.reset(target->createMCInstrInfo());

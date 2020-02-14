@@ -44,11 +44,25 @@ execute_process(COMMAND ${LLVM_CONFIG} --system-libs
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 string(REGEX REPLACE "([0-9]*).([0-9]*).*" "-DLLVM_MAJOR=\\1 -DLLVM_MINOR=\\2"  LLVM_VERSION "${LLVM_VER}")
 string(REGEX REPLACE "-l/usr/lib/libexecinfo.so" "-lexecinfo" LLVM_SYSTEMLIBS "${LLVM_SYSTEMLIBS}")
-# Ensure that all system-libs are prefixed by -l
-string(REGEX REPLACE "-l" "" LLVM_SYSTEMLIBS "${LLVM_SYSTEMLIBS}")
-string(REGEX REPLACE " " ";" LLVM_SYSTEMLIBS "${LLVM_SYSTEMLIBS}")
-list(TRANSFORM LLVM_SYSTEMLIBS PREPEND "-l")
-set(LLVM_SYSTEMLIBS_NORMALIZED ${LLVM_SYSTEMLIBS})
+# Ensure that all system-libs are prefixed by -l correctly
+separate_arguments(LLVM_SYSTEMLIBS)
+set(LLVM_SYSTEMLIBS_NORMALIZED "")
+set(LLVM_EXTRA_LINK_DIRECTORIES)
+foreach (lib ${LLVM_SYSTEMLIBS})
+  # if the argument does not start with -l and is an absolute path we have to fix it
+  if (NOT lib MATCHES "^-l" AND lib MATCHES "^/")
+    # extract libXXX.so name
+    string(REGEX MATCH "lib[a-zA-Z0-9]+.so" libname ${lib})
+    # extract name without lib or .so
+    string(REGEX REPLACE "lib([a-zA-Z09]+).so" "\\1" name ${libname})
+    # extract base path
+    string(REGEX REPLACE "/${libname}" "" libpath ${lib})
+    list(APPEND LLVM_EXTRA_LINK_DIRECTORIES ${libpath})
+    list(APPEND LLVM_SYSTEMLIBS_NORMALIZED "-l${name}")
+  else ()
+    list(APPEND LLVM_SYSTEMLIBS_NORMALIZED "${lib}")
+  endif ()
+endforeach ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 string(REPLACE "-DNDEBUG" ""  LLVM_CXXFLAGS "${LLVM_CXXFLAGS}")
@@ -58,6 +72,8 @@ FIND_PACKAGE(LibLZMA REQUIRED)
 
 include_directories(SYSTEM ${LibLZMA_INCLUDE_DIRS})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION} ${BOOST_CXX_FLAGS}")
+target_link_directories(cheritrace PUBLIC
+  ${LLVM_EXTRA_LINK_DIRECTORIES})
 target_link_libraries(cheritrace
   ${LLVM_LDFLAGS}
   ${LLVM_LIBS_FLAGS}

@@ -366,35 +366,35 @@ public:
 		assert(Emitter);
 	}
 
-	void EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI) override;
-	void EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol,
-        uint64_t Size, unsigned ByteAlignment, llvm::TailPaddingAmount TailPadding,
-        llvm::SMLoc Loc = llvm::SMLoc()) override;
-	bool EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override;
-  void EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
-        llvm::TailPaddingAmount TailPadding) override;
+	void emitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI) override;
+	void emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol,
+			  uint64_t Size, unsigned ByteAlignment, llvm::TailPaddingAmount TailPadding,
+			  llvm::SMLoc Loc = llvm::SMLoc()) override;
+	bool emitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute) override;
+	void emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+			      llvm::TailPaddingAmount TailPadding) override;
 };
 }
 }
 
-void MCInstEncodingStreamer::EmitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol, uint64_t Size,
+void MCInstEncodingStreamer::emitZerofill(llvm::MCSection *Section, llvm::MCSymbol *Symbol, uint64_t Size,
     unsigned ByteAlignment, llvm::TailPaddingAmount TailPadding, llvm::SMLoc Loc)
 {
 	assert(false && "Not implemented");
 }
 
-bool MCInstEncodingStreamer::EmitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute)
+bool MCInstEncodingStreamer::emitSymbolAttribute(llvm::MCSymbol *Symbol, llvm::MCSymbolAttr Attribute)
 {
 	assert(false && "Not implemented");
 	return false;
 }
-void MCInstEncodingStreamer::EmitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+void MCInstEncodingStreamer::emitCommonSymbol(llvm::MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
     llvm::TailPaddingAmount TailPadding)
 {
 	assert(false && "Not implemented");
 }
 
-void MCInstEncodingStreamer::EmitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI)
+void MCInstEncodingStreamer::emitInstruction(const llvm::MCInst &Inst, const llvm::MCSubtargetInfo &STI)
 {
 	llvm::SmallVector<llvm::MCFixup, 4> Fixups;
 	Emitter->encodeInstruction(Inst, OS, Fixups, STI);

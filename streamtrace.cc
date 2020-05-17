@@ -1812,6 +1812,68 @@ void decode_cap(capability_register &cap, uint64_t val2, uint64_t val3,
 	cap.length = val5;
 	cap.offset = val3 - cap.base;
 }
+/**
+ * Decode a 128-bit capability register from streamtrace values.  `val2` is always
+ * `val2` from the streamtrace, but `val1` is either `val1` or `pc` depending
+ * on the trace format. val1/pc is the 1st half of the capability containing the
+ * pointer and val2 is the 2nd half of the compressed capability containing the
+ * bounds and permissions. 
+ */
+void decode_cap128(capability_register &cap, uint64_t val2, uint64_t val1)
+{
+	// extract the tag from the reserved bits where it has been stashed for tracing.
+	cap.valid = extract_bits<47>(val2);
+	// unsealed flag is at the top of the pair of 20-bit top and bottom fields.
+	cap.unsealed =	extract_bits<40>(val2);
+	// The type, if there was one, would be the bottom 10 bits of the top
+	// and bottom fields appended together.
+	cap.type = 0; // TODO extract type from typed capabilities
+	// The permissions are in the top of the 2nd word.
+	cap.permissions = extract_bits<63,49>(val2);
+	// The exponent for the top and bottom values.
+	uint64_t exp = extract_bits<46,41>(val2);
+	// Generate a mask for grabbing the bits of the pointer
+	// that we will reuse for the bounds.
+	uint64_t mask = ((uint64_t) ~0)<<20ULL;
+	mask <<= exp;
+	// The pointer is simply the 1st 64-bit value.
+	uint64_t ptr = val1;
+	// The 20-bit field holding 20-bits of the bottom bound.
+	uint64_t botbits = extract_bits<39,20>(val2);//(half2>>20) & 0xFFFFFULL;
+	// Shift if up, zeros at the bottom, and bits borrowed from the
+	// pointer at the top.
+	uint64_t bot = (ptr&mask)|(botbits<<exp);
+	// The 20-bit field holding 20-bits of the top bound.
+	uint64_t topbits = (half2) & 0xFFFFFULL;
+	// Shift them up, zeros at the bottom, bits borrowed from the
+	// pointer at the top.
+	uint64_t top = (ptr&mask)|(topbits<<exp);
+	
+	// Procedure described in the cheri architecture document for determining
+	// if the upper bits of the pointer should be adjusted by one for
+	// either of the bounds.
+	uint64_t edgbits = (botbits-0x100ULL)&0xFFFFFULL;
+	uint64_t ptrbits = (ptr>>exp)&0xFFFFFULL;
+	uint8_t  ptrHi = (ptrbits < edgbits);
+	uint8_t  botHi = (botbits < edgbits);
+	uint8_t  topHi = (topbits < edgbits);
+  
+	uint64_t bigOne = 1ULL<<(exp+20ULL);
+	// Calculate potential upper-bits fixup for the top.
+	uint64_t topfix = 0;
+	if (topHi  && !ptrHi) topfix =  bigOne;
+	if (!topHi && ptrHi)  topfix = -bigOne;
+	top = top + topfix;
+	// Calculate potential upper-bits fixup for the bottom.
+	uint64_t botfix = 0;
+	if (botHi  && !ptrHi) botfix =  bigOne;
+	if (!botHi && ptrHi)  botfix = -bigOne;
+	bot = bot + botfix;
+	// Fill the full address fields.
+	cap.offset = ptr - bot;
+	cap.base = bot;
+	cap.length = top - bot;
+}
 
 
 /**
@@ -1843,6 +1905,27 @@ void decode_entry(debug_trace_entry &e, uint8_t version, uint64_t val1, uint64_t
 			e.is_store = true;
 			e.reg_value.gp = val2;
 			e.memory_address = val1;
+			break;
+		}
+		case 8:
+		{
+			decode_cap128(e.reg_value.cap, val2, val1);
+			break;
+		}
+		case 9:
+		{
+			e.is_load = true;
+			e.memory_address = val1;
+			decode_cap128(e.reg_value.cap, val2, e.pc);
+			e.pc = 0;
+			break;
+		}
+		case 10:
+		{
+			e.is_store = true;
+			decode_cap128(e.reg_value.cap, val2, e.pc);
+			e.memory_address = val1;
+			e.pc = 0;
 			break;
 		}
 		case 11:
